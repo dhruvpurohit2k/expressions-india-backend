@@ -30,8 +30,8 @@ func seedDBWithEvents(s *Server) error {
 		INSERT INTO event (title,start_date,end_date) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING RETURNING id;
 	`
 	insertMediaQuery := `
-	   INSERT INTO media (title, media_type, description, url, thumbnail_url)
-	   VALUES ($1, $2, $3, $4, $5)
+	   INSERT INTO media (title, media_type, description, url, thumbnail_url,s3_key)
+	   VALUES ($1, $2, $3, $4, $5, $6)
 	   ON CONFLICT (url) DO UPDATE SET url = EXCLUDED.url
 	   RETURNING id;
 	`
@@ -61,14 +61,15 @@ func seedDBWithEvents(s *Server) error {
 		}
 		for _, media := range eventSeed.Medias {
 			if media.MediaType == "s3" {
-				location, err := s.uploadTos3(filepath.Join(currentEventMediaFolder, media.Url), media.Url, "events")
+				location, s3Key, err := s.uploadTos3(filepath.Join(currentEventMediaFolder, media.Url), media.Url, "events")
 				if err != nil {
 					return err
 				}
 				media.Url = location
+				media.S3Key = s3Key
 			}
 			var mediaId string
-			err = tx.QueryRow(insertMediaQuery, media.Title, media.MediaType, media.Description, media.Url, media.ThumbnailUrl).Scan(&mediaId)
+			err = tx.QueryRow(insertMediaQuery, media.Title, media.MediaType, media.Description, media.Url, media.ThumbnailUrl, media.S3Key).Scan(&mediaId)
 			if err != nil {
 				return err
 			}
@@ -102,8 +103,8 @@ func seedDBWithActivities(s *Server) error {
 	`
 
 	insertMediaQuery := `
-    INSERT INTO media (title, media_type, description, url, thumbnail_url) 
-    VALUES ($1, $2, $3, $4, $5) 
+    INSERT INTO media (title, media_type, description, url, thumbnail_url,s3_key) 
+    VALUES ($1, $2, $3, $4, $5,$6) 
     ON CONFLICT (url) DO UPDATE SET url = EXCLUDED.url 
     RETURNING id;
 	`
@@ -119,14 +120,15 @@ func seedDBWithActivities(s *Server) error {
 		}
 		for _, media := range activitySeed.Medias {
 			if media.MediaType == "s3" {
-				location, err := s.uploadTos3(filepath.Join(basePath, "media", media.Url), media.Url, "activities")
+				location, s3Key, err := s.uploadTos3(filepath.Join(basePath, "media", media.Url), media.Url, "activities")
 				if err != nil {
 					return err
 				}
 				media.Url = location
+				media.S3Key = s3Key
 			}
 			var mediaId string
-			err = tx.QueryRow(insertMediaQuery, media.Title, media.MediaType, media.Description, media.Url, media.ThumbnailUrl).Scan(&mediaId)
+			err = tx.QueryRow(insertMediaQuery, media.Title, media.MediaType, media.Description, media.Url, media.ThumbnailUrl, media.S3Key).Scan(&mediaId)
 
 			if err != nil {
 				return err
@@ -167,7 +169,7 @@ func seedDBWithJournal(s *Server) error {
 	UPDATE SET name=EXCLUDED.name RETURNING id;`
 	insertJournalChapterAuthor := `INSERT INTO journal_chapter_author VALUES ($1,$2) ON CONFLICT DO NOTHING;`
 	insertJournalMedia := `INSERT INTO journal_media VALUES($1,$2) ON CONFLICT DO NOTHING;`
-	insertMedia := `INSERT INTO media (media_type,url) VALUES($1,$2) ON CONFLICT (url) DO UPDATE SET url = EXCLUDED.url RETURNING id`
+	insertMedia := `INSERT INTO media (media_type,url,s3_key) VALUES($1,$2,$3) ON CONFLICT (url) DO UPDATE SET url = EXCLUDED.url RETURNING id`
 	insertJournalChapterMedia := `INSERT INTO journal_chapter_media VALUES($1,$2) ON CONFLICT DO NOTHING;`
 	mediaFolder := filepath.Join(basePath, "media")
 	for _, journalSeed := range journalSeeds {
@@ -186,18 +188,18 @@ func seedDBWithJournal(s *Server) error {
 			return err
 		}
 
-		location, err := s.uploadTos3(filepath.Join(mediaFolder, journalSeed.Title, "journal.pdf"), journalSeed.Title, "journal")
+		location, s3Key, err := s.uploadTos3(filepath.Join(mediaFolder, journalSeed.Title, "journal.pdf"), journalSeed.Title, "journal")
 
 		var journalMediaId string
 
-		err = tx.QueryRow(insertMedia, "s3", location).Scan(&journalMediaId)
+		err = tx.QueryRow(insertMedia, "s3", location, s3Key).Scan(&journalMediaId)
 		tx.Exec(insertJournalMedia, journalId, journalMediaId)
 
-		location, err = s.uploadTos3(filepath.Join(mediaFolder, journalSeed.Title, "prelimenry.pdf"), journalSeed.Title+"_prelimenry", "journal")
+		location, s3Key, err = s.uploadTos3(filepath.Join(mediaFolder, journalSeed.Title, "prelimenry.pdf"), journalSeed.Title+"_prelimenry", "journal")
 
 		var journalMediaPreId string
 
-		err = tx.QueryRow(insertMedia, "s3", location).Scan(&journalMediaPreId)
+		err = tx.QueryRow(insertMedia, "s3", location, s3Key).Scan(&journalMediaPreId)
 		tx.Exec(insertJournalMedia, journalId, journalMediaPreId)
 
 		for _, chapter := range journalSeed.Chapters {
@@ -206,12 +208,12 @@ func seedDBWithJournal(s *Server) error {
 			if err != nil {
 				return err
 			}
-			location, err := s.uploadTos3(filepath.Join(mediaFolder, journalSeed.Title, fmt.Sprintf("%s.pdf", chapter.Name)), journalSeed.Title+chapter.Name, "journalchapter")
+			location, s3Key, err := s.uploadTos3(filepath.Join(mediaFolder, journalSeed.Title, fmt.Sprintf("%s.pdf", chapter.Name)), journalSeed.Title+chapter.Name, "journalchapter")
 			if err != nil {
 				return err
 			}
 			var journalChapMediaId string
-			err = tx.QueryRow(insertMedia, "s3", location).Scan(&journalChapMediaId)
+			err = tx.QueryRow(insertMedia, "s3", location, s3Key).Scan(&journalChapMediaId)
 
 			tx.Exec(insertJournalChapterMedia, chapterId, journalChapMediaId)
 
@@ -248,7 +250,7 @@ func seedDBWithWorkshop(s *Server) error {
 		return err
 	}
 	insertWorkshop := `INSERT INTO workshop(title,start_date,end_date,description,workshop_type) VALUES ($1,$2,$3,$4,$5) RETURNING id`
-	insertMedia := `INSERT INTO media (media_type,url) VALUES($1,$2) ON CONFLICT (url) DO UPDATE SET url = EXCLUDED.url RETURNING id`
+	insertMedia := `INSERT INTO media (media_type,url,s3_key) VALUES($1,$2,$3) ON CONFLICT (url) DO UPDATE SET url = EXCLUDED.url RETURNING id`
 	insertWorkshopMedia := `INSERT INTO workshop_media (workshop_id,media_id) VALUES ($1,$2) `
 	for _, workshopSeed := range workshopSeeds {
 		var workshopId string
@@ -265,12 +267,12 @@ func seedDBWithWorkshop(s *Server) error {
 		if workshopSeed.Link != nil {
 			filePathParts := strings.Split(*workshopSeed.Link, "/")
 			fileName := filePathParts[len(filePathParts)-1]
-			location, err := s.uploadTos3(filepath.Join(basPath, "media", fileName), fileName, "workshop")
+			location, s3Key, err := s.uploadTos3(filepath.Join(basPath, "media", fileName), fileName, "workshop")
 			if err != nil {
 				return err
 			}
 			var mediaId string
-			err = tx.QueryRow(insertMedia, "s3", location).Scan(&mediaId)
+			err = tx.QueryRow(insertMedia, "s3", location, s3Key).Scan(&mediaId)
 			if err != nil {
 				return err
 			}
@@ -283,11 +285,11 @@ func seedDBWithWorkshop(s *Server) error {
 
 func seedDB(s *Server) error {
 	fmt.Println("[SEEDING STARTED]")
-	fmt.Println("\t[SEEDING ACTIVTIES]")
-	if err := seedDBWithActivities(s); err != nil {
-		return err
-	}
-	fmt.Println("\t[SEEDED ACTIVTIES]")
+	// fmt.Println("\t[SEEDING ACTIVTIES]")
+	// if err := seedDBWithActivities(s); err != nil {
+	// 	return err
+	// }
+	// fmt.Println("\t[SEEDED ACTIVTIES]")
 	fmt.Println("\t[SEEDING EVENTS]")
 	if err := seedDBWithEvents(s); err != nil {
 		return err

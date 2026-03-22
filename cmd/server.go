@@ -44,6 +44,8 @@ func (s *Server) SetupRoutes() {
 	s.mux.HandleFunc("GET /event/{id}", s.GetEvent)
 	s.mux.HandleFunc("POST /event", s.HandleCreateEvent)
 	s.mux.HandleFunc("PUT /event/{id}", s.UpdateEvent)
+	s.mux.HandleFunc("GET /workshop", s.GetWorkshops)
+	s.mux.HandleFunc("POST /workshop", s.PostWorkshop)
 }
 
 func createServer() *Server {
@@ -52,23 +54,18 @@ func createServer() *Server {
 		mu:  sync.RWMutex{},
 	}
 
-	//Connect to Relational DataBase
 	dbConn, err := connectToDB()
 	if err != nil {
-		fmt.Println(err)
 		return nil
 	}
 	server.db = dbConn
 
-	//Connect to S3 Object Storage
 	s3Conn, err := connectToS3()
 	if err != nil {
-		fmt.Println(err)
 		return nil
 	}
 	server.s3 = s3Conn
 
-	//If seeding is true Fill the DBs With Data
 	if "true" == os.Getenv("SEEDING_DB") {
 		if err := seedDB(server); err != nil {
 			fmt.Println(err)
@@ -144,14 +141,14 @@ func runMigrations(dbString string) error {
 	}
 }
 
-func (s *Server) uploadTos3(fileUrl, fileName string, folderName string) (string, error) {
+func (s *Server) uploadTos3(fileUrl, fileName string, folderName string) (string, string, error) {
 	uploader := manager.NewUploader(s.s3, func(u *manager.Uploader) {
 		u.PartSize = 5 * 1024 * 1024
 		u.LeavePartsOnError = false
 	})
 	file, err := os.Open(fileUrl)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer file.Close()
 	contentType := mime.TypeByExtension(filepath.Ext(fileUrl))
@@ -177,7 +174,7 @@ func (s *Server) uploadTos3(fileUrl, fileName string, folderName string) (string
 		ContentType:        aws.String(contentType),
 		ContentDisposition: aws.String("inline"),
 	})
-	return result.Location, nil
+	return result.Location, s3Key, nil
 }
 func (s *Server) uploadTos3IO(file io.Reader, fileName, folderName string) (string, string, error) {
 

@@ -52,7 +52,8 @@ CREATE TABLE IF NOT EXISTS workshop(
 	description TEXT,
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-	workshop_type INT REFERENCES workshop_type(id) ON DELETE CASCADE
+	workshop_type INT REFERENCES workshop_type(id) ON DELETE CASCADE,
+	registration_link TEXT
 );
 
 CREATE TABLE IF NOT EXISTS user_type(

@@ -12,6 +12,7 @@ type Media struct {
 	MediaType    string  `json:"mediaType" db:"media_type"`
 	Description  *string `json:"description" db:"description"`
 	Url          string  `json:"url" db:"url"`
+	S3Key        string  `json:"s3Key" db:"s3_key"`
 	ThumbnailUrl *string `json:"thumbnailUrl" db:"thumbnail_url"`
 }
 

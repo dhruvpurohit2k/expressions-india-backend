@@ -42,9 +42,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (s *Server) SetupRoutes() {
 	s.mux.HandleFunc("GET /event", s.GetEventList)
 	s.mux.HandleFunc("GET /event/{id}", s.GetEvent)
-	s.mux.HandleFunc("POST /event", s.HandleCreateEvent)
-	s.mux.HandleFunc("PUT /event/{id}", s.UpdateEvent)
+	s.mux.HandleFunc("POST /event", s.PostEvent)
+	s.mux.HandleFunc("PUT /event/{id}", s.PutEvent)
 	s.mux.HandleFunc("GET /workshop", s.GetWorkshops)
+	s.mux.HandleFunc("GET /workshop/{id}", s.GetWorkshop)
+	s.mux.HandleFunc("PUT /workshop/{id}", s.PutWorkshop)
 	s.mux.HandleFunc("POST /workshop", s.PostWorkshop)
 }
 

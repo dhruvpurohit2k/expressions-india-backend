@@ -17,7 +17,7 @@ func (s *Server) GetEventList(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(events)
 }
 
-func (s *Server) HandleCreateEvent(w http.ResponseWriter, r *http.Request) {
+func (s *Server) PostEvent(w http.ResponseWriter, r *http.Request) {
 	tx, err := s.db.Beginx()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -112,7 +112,7 @@ func (s *Server) GetEvent(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 
 }
-func (s *Server) UpdateEvent(w http.ResponseWriter, r *http.Request) {
+func (s *Server) PutEvent(w http.ResponseWriter, r *http.Request) {
 	tx, err := s.db.Beginx()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)

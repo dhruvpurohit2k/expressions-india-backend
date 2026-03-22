@@ -23,11 +23,12 @@ type MediaLink struct {
 }
 
 type WorkshopDTO struct {
-	Id               string  `json:"id" db:"id"`
-	Title            string  `json:"title" db:"title"`
-	RegistrationLink string  `json:"registrationLink" db:"registration_link"`
-	Description      *string `json:"description" db:"description"`
-	StartDate        string  `json:"startDate" db:"start_date"`
-	EndDate          *string `json:"endDate" db:"end_date"`
-	WorkshopType     string  `json:"workshopType" db:"workshop_type"`
+	Id               string      `json:"id" db:"id"`
+	Title            string      `json:"title" db:"title"`
+	RegistrationLink *string     `json:"registrationLink" db:"registration_link"`
+	Description      *string     `json:"description" db:"description"`
+	StartDate        string      `json:"startDate" db:"start_date"`
+	EndDate          *string     `json:"endDate" db:"end_date"`
+	WorkshopType     string      `json:"workshopType" db:"workshop_type"`
+	MediaLink        []MediaLink `json:"mediaLink" db:"-"`
 }

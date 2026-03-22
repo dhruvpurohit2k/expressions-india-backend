@@ -40,7 +40,7 @@ func (s *Server) HandleCreateEvent(w http.ResponseWriter, r *http.Request) {
 		endDate = endDateStr
 	}
 
-	insertMedia := `INSERT INTO media (media_type,url) VALUES ($1,$2) ON CONFLICT (url) DO UPDATE SET url=EXCLUDED.url RETURNING id`
+	insertMedia := `INSERT INTO media (media_type,url,s3_key) VALUES ($1,$2,$3) ON CONFLICT (url) DO UPDATE SET url=EXCLUDED.url RETURNING id`
 	insertEventMedia := `INSERT INTO event_media (event_id,media_id) VALUES ($1,$2)`
 	insertEvent := `INSERT INTO EVENT (title,description,start_date,end_date) VALUES ($1,$2,$3,$4) RETURNING id`
 	var eventId string
@@ -55,14 +55,14 @@ func (s *Server) HandleCreateEvent(w http.ResponseWriter, r *http.Request) {
 		f, _ := fileHeader.Open()
 		defer f.Close()
 
-		location, err := s.uploadTos3IO(f, fileHeader.Filename, "events")
+		location, s3Key, err := s.uploadTos3IO(f, fileHeader.Filename, "events")
 		if err != nil {
 			fmt.Println(err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		var mediaId string
-		err = tx.QueryRow(insertMedia, "s3", location).Scan(&mediaId)
+		err = tx.QueryRow(insertMedia, "s3", location, s3Key).Scan(&mediaId)
 		if err != nil {
 			fmt.Println(err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -97,12 +97,12 @@ func (s *Server) GetEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	linkQuery := `
-			SELECT m.url
+			SELECT m.id,m.url
 			FROM media m
 			JOIN event_media em ON m.id = em.media_id
 		WHERE em.event_id=$1;
 		`
-	var link []string
+	var link []MediaLink
 	s.db.Select(&link, linkQuery, id)
 	event.MediaLink = link
 	data, _ := json.Marshal(event)
@@ -119,18 +119,10 @@ func (s *Server) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
-	// fmt.Println(
-	// 	r.FormValue("title"),
-	// 	r.FormValue("description"),
-	// 	r.FormValue("link"),
-	// 	r.FormValue("startDate"),
-	// 	r.FormValue("endDate"),
-	// 	r.FormValue("formLink"),
-	// )
-	// return
 	id := r.PathValue("id")
 	updateQuery := `UPDATE event SET title=$1, description=$2, start_date=$3, end_date=$4 WHERE id=$5;`
-
+	insertEventMedia := `INSERT INTO event_media (event_id,media_id) VALUES ($1,$2)`
+	insertMedia := `INSERT INTO media (media_type,url,s3_key) VALUES ($1,$2,$3) ON CONFLICT (url) DO UPDATE SET url=EXCLUDED.url RETURNING id`
 	endDateStr := r.FormValue("endDate")
 	var endDate any
 	if endDateStr == "" {
@@ -144,6 +136,51 @@ func (s *Server) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	files := r.MultipartForm.File["images"]
+	for _, fileHeader := range files {
+		f, _ := fileHeader.Open()
+		defer f.Close()
+
+		location, s3key, err := s.uploadTos3IO(f, fileHeader.Filename, "events")
+		if err != nil {
+			fmt.Println(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		var mediaId string
+		err = tx.QueryRow(insertMedia, "s3", location, s3key).Scan(&mediaId)
+		if err != nil {
+			fmt.Println(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		_, err = tx.Exec(insertEventMedia, id, mediaId)
+		if err != nil {
+			fmt.Println(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+	}
+	deleteMedia := `DELETE FROM media WHERE id=$1 RETURNING s3_key`
+	deletedIds := r.MultipartForm.Value["deletedIds"]
+	fmt.Println(deletedIds)
+	for _, id := range deletedIds {
+		fmt.Println("DELETING", id)
+		var s3Key string
+		err := tx.QueryRow(deleteMedia, id).Scan(&s3Key)
+		if err != nil {
+			fmt.Println(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		err = s.DeleteFromS3(s3Key)
+		if err != nil {
+			fmt.Println("Couldn't delete", s3Key)
+		}
+	}
+
 	err = tx.Commit()
 
 	if err != nil {

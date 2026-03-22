@@ -109,6 +109,7 @@ CREATE TABLE IF NOT EXISTS media(
 	id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
 	title TEXT,
 	media_type VARCHAR(20) NOT NULL,
+	s3_key VARCHAR(255) NOT NULL,
 	description TEXT,
 	url TEXT NOT NULL UNIQUE,
 	thumbnail_url TEXT,
@@ -154,7 +155,7 @@ CREATE TABLE IF NOT EXISTS workshop_media(
 
 CREATE TABLE IF NOT EXISTS event_media(
 	event_id UUID REFERENCES event(id) ON DELETE CASCADE,
-    media_id UUID REFERENCES media(id) ON DELETE CASCADE,
+	media_id UUID REFERENCES media(id) ON DELETE CASCADE,
 	PRIMARY KEY (event_id,media_id)
 );
 

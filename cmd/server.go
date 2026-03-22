@@ -179,14 +179,14 @@ func (s *Server) uploadTos3(fileUrl, fileName string, folderName string) (string
 	})
 	return result.Location, nil
 }
-func (s *Server) uploadTos3IO(file io.Reader, fileName, folderName string) (string, error) {
+func (s *Server) uploadTos3IO(file io.Reader, fileName, folderName string) (string, string, error) {
 
 	uploader := manager.NewUploader(s.s3)
 
 	buffer := make([]byte, 512)
 	n, err := file.Read(buffer)
 	if err != nil && err != io.EOF {
-		return "", fmt.Errorf("failed to read file header: %w", err)
+		return "", "", fmt.Errorf("failed to read file header: %w", err)
 	}
 	contentType := http.DetectContentType(buffer[:n])
 
@@ -207,8 +207,20 @@ func (s *Server) uploadTos3IO(file io.Reader, fileName, folderName string) (stri
 	})
 
 	if err != nil {
-		return "", fmt.Errorf("s3 upload failed: %w", err)
+		return "", "", fmt.Errorf("s3 upload failed: %w", err)
 	}
 
-	return result.Location, nil
+	return result.Location, s3Key, nil
+}
+
+func (s *Server) DeleteFromS3(s3Key string) error {
+
+	_, err := s.s3.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
+		Bucket: aws.String("expressions-india"),
+		Key:    aws.String(s3Key),
+	})
+	if err != nil {
+		return err
+	}
+	return nil
 }

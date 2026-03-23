@@ -6,6 +6,21 @@ import (
 	"net/http"
 )
 
+func (s *Server) GetWorkshopType(w http.ResponseWriter, r *http.Request) {
+	query := `SELECT name FROM workshop_type;`
+	var workshopTypes []string
+	err := s.db.Select(&workshopTypes, query)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string][]string{"types": workshopTypes})
+	// w.WriteHeader(http.StatusOK)
+
+}
+
 func (s *Server) GetWorkshops(w http.ResponseWriter, r *http.Request) {
 	query := `SELECT w.id, w.title, w.description, wt.name AS workshop_type, w.start_date, w.end_date FROM workshop w JOIN workshop_type wt ON wt.id = w.workshop_type ORDER BY wt.id ASC, w.start_date ;`
 
@@ -97,9 +112,9 @@ func (s *Server) GetWorkshop(w http.ResponseWriter, r *http.Request) {
 			JOIN workshop_media wm ON m.id = wm.media_id
 		WHERE wm.workshop_id=$1;
 		`
-	var link []MediaLink
+	var link []UploadedMedia
 	s.db.Select(&link, linkQuery, id)
-	workshop.MediaLink = link
+	workshop.UploadedMedia = link
 	data, _ := json.Marshal(workshop)
 
 	w.Header().Set("Content-Type", "application/json")

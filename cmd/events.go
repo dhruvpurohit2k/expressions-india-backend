@@ -50,7 +50,7 @@ func (s *Server) PostEvent(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	files := r.MultipartForm.File["images"]
+	files := r.MultipartForm.File["medias"]
 	for _, fileHeader := range files {
 		f, _ := fileHeader.Open()
 		defer f.Close()
@@ -102,9 +102,9 @@ func (s *Server) GetEvent(w http.ResponseWriter, r *http.Request) {
 			JOIN event_media em ON m.id = em.media_id
 		WHERE em.event_id=$1;
 		`
-	var link []MediaLink
+	var link []UploadedMedia
 	s.db.Select(&link, linkQuery, id)
-	event.MediaLink = link
+	event.UploadedMedia = link
 	data, _ := json.Marshal(event)
 
 	w.Header().Set("Content-Type", "application/json")

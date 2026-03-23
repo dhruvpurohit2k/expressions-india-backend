@@ -48,6 +48,7 @@ func (s *Server) SetupRoutes() {
 	s.mux.HandleFunc("GET /workshop/{id}", s.GetWorkshop)
 	s.mux.HandleFunc("PUT /workshop/{id}", s.PutWorkshop)
 	s.mux.HandleFunc("POST /workshop", s.PostWorkshop)
+	s.mux.HandleFunc("GET /workshop/types", s.GetWorkshopType)
 }
 
 func createServer() *Server {

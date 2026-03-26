@@ -21,17 +21,18 @@ func seedDBWithEvents(s *Server) error {
 	if err := json.Unmarshal(data, &eventsSeeds); err != nil {
 		return err
 	}
-
-	if os.Getenv("CLEAR_WHILE_SEEDING") == "true" {
-		tx.Exec(`TRUNCATE TABLE event, event_media RESTART IDENTITY CASCADE`)
-	}
-
+	fmt.Println(eventsSeeds)
+	s.db.Exec(`TRUNCATE TABLE event CASCADE;`)
 	insertEventQuery := `
-		INSERT INTO event (title,start_date,end_date) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING RETURNING id;
+	INSERT INTO event 
+	(title, description, perks, start_date, end_date, start_time, end_time, location, is_paid, price) 
+	VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+	ON CONFLICT DO NOTHING
+	RETURNING id;
 	`
 	insertMediaQuery := `
-	   INSERT INTO media (title, media_type, description, url, thumbnail_url,s3_key)
-	   VALUES ($1, $2, $3, $4, $5, $6)
+	   INSERT INTO media (media_type,url,s3_key)
+	   VALUES ($1, $2, $3)
 	   ON CONFLICT (url) DO UPDATE SET url = EXCLUDED.url
 	   RETURNING id;
 	`
@@ -40,39 +41,53 @@ func seedDBWithEvents(s *Server) error {
 	`
 	mediaFolderPath := "./data/events/media"
 	for _, eventSeed := range eventsSeeds {
-		currentEventMediaFolder := filepath.Join(mediaFolderPath, eventSeed.Title)
-		files, err := os.ReadDir(currentEventMediaFolder)
+
+		perksJSON, err := json.Marshal(eventSeed.Perks)
 		if err != nil {
-			fmt.Println("NO MEDIA FOLDER")
 			return err
-		}
-		for _, file := range files {
-			eventSeed.Medias = append(eventSeed.Medias, Media{
-				Title:       nil,
-				MediaType:   "s3",
-				Description: nil,
-				Url:         file.Name(),
-			})
 		}
 		var eventId string
-		err = tx.QueryRow(insertEventQuery, eventSeed.Title, eventSeed.StartDate, eventSeed.EndDate).Scan(&eventId)
+		err = tx.QueryRow(
+			insertEventQuery,
+			eventSeed.Title,
+			eventSeed.Description,
+			perksJSON,
+			eventSeed.StartDate,
+			eventSeed.EndDate,
+			eventSeed.StartTime,
+			eventSeed.EndTime,
+			eventSeed.Location,
+			eventSeed.IsPaid,
+			eventSeed.Price,
+		).Scan(&eventId)
+
 		if err != nil {
 			return err
 		}
+
 		for _, media := range eventSeed.Medias {
-			if media.MediaType == "s3" {
-				location, s3Key, err := s.uploadTos3(filepath.Join(currentEventMediaFolder, media.Url), media.Url, "events")
-				if err != nil {
-					return err
-				}
-				media.Url = location
-				media.S3Key = s3Key
-			}
-			var mediaId string
-			err = tx.QueryRow(insertMediaQuery, media.Title, media.MediaType, media.Description, media.Url, media.ThumbnailUrl, media.S3Key).Scan(&mediaId)
+			fmt.Println(media)
+
+			location, s3Key, err := s.uploadTos3(
+				filepath.Join(mediaFolderPath, media),
+				media,
+				"events",
+			)
 			if err != nil {
 				return err
 			}
+			var mediaId string
+			err = tx.QueryRow(
+				insertMediaQuery,
+				"image",
+				location,
+				s3Key,
+			).Scan(&mediaId)
+
+			if err != nil {
+				return err
+			}
+
 			tx.Exec(insertEventMedia, eventId, mediaId)
 		}
 	}
@@ -249,18 +264,36 @@ func seedDBWithWorkshop(s *Server) error {
 	if err := json.Unmarshal(data, &workshopSeeds); err != nil {
 		return err
 	}
-	insertWorkshop := `INSERT INTO workshop(title,start_date,end_date,description,workshop_type) VALUES ($1,$2,$3,$4,$5) RETURNING id`
+	insertWorkshop := `
+	INSERT INTO workshop 
+	(title, description, perks, start_date, end_date, start_time, end_time, location, is_paid, price,workshop_type) 
+	VALUES ($1,$2,$3,$4,NULLIF($5,'')::DATE,$6,$7,$8,$9,$10,$11::INT)
+	ON CONFLICT DO NOTHING
+	RETURNING id;
+	`
 	insertMedia := `INSERT INTO media (media_type,url,s3_key) VALUES($1,$2,$3) ON CONFLICT (url) DO UPDATE SET url = EXCLUDED.url RETURNING id`
 	insertWorkshopMedia := `INSERT INTO workshop_media (workshop_id,media_id) VALUES ($1,$2) `
 	for _, workshopSeed := range workshopSeeds {
+		fmt.Println(workshopSeed)
 		var workshopId string
-		err := tx.QueryRow(
+		perksJSON, err := json.Marshal(workshopSeed.Perks)
+		if err != nil {
+			return err
+		}
+		err = tx.QueryRow(
 			insertWorkshop,
 			workshopSeed.Title,
+			workshopSeed.Description,
+			perksJSON,
 			workshopSeed.StartDate,
 			workshopSeed.EndDate,
-			workshopSeed.Description,
-			workshopSeed.WorkshopType).Scan(&workshopId)
+			workshopSeed.StartTime,
+			workshopSeed.EndTime,
+			workshopSeed.Location,
+			workshopSeed.IsPaid,
+			workshopSeed.Price,
+			workshopSeed.WorkshopType,
+		).Scan(&workshopId)
 		if err != nil {
 			return err
 		}
@@ -277,34 +310,78 @@ func seedDBWithWorkshop(s *Server) error {
 				return err
 			}
 			tx.Exec(insertWorkshopMedia, workshopId, mediaId)
-
 		}
+		if workshopSeed.Picture != nil {
+			location, s3Key, err := s.uploadTos3(filepath.Join(basPath, "media", *workshopSeed.Picture), *workshopSeed.Picture, "workshop")
+			if err != nil {
+				return err
+			}
+			var mediaId string
+			err = tx.QueryRow(insertMedia, "s3", location, s3Key).Scan(&mediaId)
+			if err != nil {
+				return err
+			}
+			tx.Exec(insertWorkshopMedia, workshopId, mediaId)
+		}
+	}
+	return tx.Commit()
+}
+
+func addHomePageImages(s *Server) error {
+	insertImage := `INSERT INTO home_page_image (url,s3_key) VALUES ($1,$2);`
+	defaultImages := []string{
+		"./data/events/media/1.png",
+		"./data/events/media/2.png",
+		"./data/events/media/3.png",
+	}
+	s.db.Exec(`TRUNCATE TABLE home_page_image CASCADE;`)
+	tx, err := s.db.Beginx()
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	defer tx.Rollback()
+	for _, image := range defaultImages {
+
+		location, s3Key, err := s.uploadTos3(image, image, "homepage")
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+		_, err = tx.Exec(insertImage, location, s3Key)
+		if err != nil {
+			return err
+		}
+		fmt.Println("ADDED", image)
+
 	}
 	return tx.Commit()
 }
 
 func seedDB(s *Server) error {
 	fmt.Println("[SEEDING STARTED]")
-	// fmt.Println("\t[SEEDING ACTIVTIES]")
-	// if err := seedDBWithActivities(s); err != nil {
-	// 	return err
-	// }
-	// fmt.Println("\t[SEEDED ACTIVTIES]")
+
 	fmt.Println("\t[SEEDING EVENTS]")
 	if err := seedDBWithEvents(s); err != nil {
 		return err
 	}
 	fmt.Println("\t[SEEDED EVENTS]")
-	fmt.Println("\t[SEEDING JOURNAL]")
-	if err := seedDBWithJournal(s); err != nil {
-		return err
-	}
-	fmt.Println("\t[SEEDED JOURNAL]")
+	// fmt.Println("\t[SEEDING JOURNAL]")
+	// if err := seedDBWithJournal(s); err != nil {
+	// 	return err
+	// }
+	// fmt.Println("\t[SEEDED JOURNAL]")
 	fmt.Println("\t[SEEDING WORKSHOP]")
 	if err := seedDBWithWorkshop(s); err != nil {
 		return err
 	}
 	fmt.Println("\t[SEEDED WORKSHOP]")
+	fmt.Println("\t[SEEDING HOMEPAGEIMAGE]")
+	if err := addHomePageImages(s); err != nil {
+		return err
+	}
+	fmt.Println("\t[SEEDED HOMEPAGEIMAGE]")
 	fmt.Println("[SEEDING DONE]")
 
 	return nil

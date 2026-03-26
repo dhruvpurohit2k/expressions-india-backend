@@ -22,9 +22,16 @@ func (s *Server) GetWorkshopType(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) GetWorkshops(w http.ResponseWriter, r *http.Request) {
-	query := `SELECT w.id, w.title, w.description, wt.name AS workshop_type, w.start_date, w.end_date FROM workshop w JOIN workshop_type wt ON wt.id = w.workshop_type ORDER BY wt.id ASC, w.start_date ;`
 
-	workshops := []WorkshopDTO{}
+	query := `
+    SELECT w.id, w.title, wt.name AS workshop_type, w.start_date, w.end_date 
+    FROM workshop w 
+    JOIN workshop_type wt ON wt.id = w.workshop_type 
+    WHERE w.start_date >= CURRENT_DATE + INTERVAL '1 day'
+    ORDER BY wt.id ASC, w.start_date
+`
+
+	workshops := []WorkshopListDTO{}
 
 	err := s.db.Select(&workshops, query)
 	if err != nil {
@@ -32,8 +39,18 @@ func (s *Server) GetWorkshops(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	listOfWorkshops := make(map[string][]WorkshopListDTO)
+
+	for _, workshop := range workshops {
+		_, ok := listOfWorkshops[workshop.WorkshopType]
+		if !ok {
+			listOfWorkshops[workshop.WorkshopType] = make([]WorkshopListDTO, 0)
+		}
+		listOfWorkshops[workshop.WorkshopType] = append(listOfWorkshops[workshop.WorkshopType], workshop)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(workshops)
+	json.NewEncoder(w).Encode(map[string]map[string][]WorkshopListDTO{"data": listOfWorkshops})
 }
 
 func (s *Server) PostWorkshop(w http.ResponseWriter, r *http.Request) {
@@ -99,27 +116,88 @@ func (s *Server) PostWorkshop(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) GetWorkshop(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	query := `SELECT id,title,description,workshop_type,start_date,end_date,registration_link FROM workshop WHERE id=$1;`
-	workshop := WorkshopDTO{}
-	if err := s.db.Get(&workshop, query, id); err != nil {
-		fmt.Println(err)
+
+	query := `
+	SELECT 
+		id,
+		title,
+		description,
+		perks,
+		start_date,
+		end_date,
+		start_time,
+		end_time,
+		location,
+		is_paid,
+		price,
+		workshop_type
+	FROM workshop
+	WHERE id=$1;
+	`
+
+	// temp struct to hold raw perks
+	type workshopRow struct {
+		ID           string  `db:"id"`
+		Title        string  `db:"title"`
+		Description  string  `db:"description"`
+		Perks        []byte  `db:"perks"`
+		StartDate    string  `db:"start_date"`
+		EndDate      *string `db:"end_date"`
+		StartTime    *string `db:"start_time"`
+		EndTime      *string `db:"end_time"`
+		Location     string  `db:"location"`
+		IsPaid       bool    `db:"is_paid"`
+		Price        *int    `db:"price"`
+		WorkshopType int     `db:"workshop_type"`
+	}
+
+	var row workshopRow
+
+	if err := s.db.Get(&row, query, id); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	linkQuery := `
-			SELECT m.id,m.url
-			FROM media m
-			JOIN workshop_media wm ON m.id = wm.media_id
-		WHERE wm.workshop_id=$1;
-		`
-	var link []UploadedMedia
-	s.db.Select(&link, linkQuery, id)
-	workshop.UploadedMedia = link
-	data, _ := json.Marshal(workshop)
 
+	var perks map[string]interface{}
+	if len(row.Perks) > 0 {
+		if err := json.Unmarshal(row.Perks, &perks); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	}
+
+	event := WorkshopDTO{
+		ID:           row.ID,
+		Title:        row.Title,
+		Description:  row.Description,
+		Perks:        perks,
+		StartDate:    row.StartDate,
+		EndDate:      row.EndDate,
+		StartTime:    row.StartTime,
+		EndTime:      row.EndTime,
+		Location:     row.Location,
+		IsPaid:       row.IsPaid,
+		Price:        row.Price,
+		WorkshopType: row.WorkshopType,
+	}
+
+	// media query (same as yours)
+	linkQuery := `
+	SELECT m.id, m.url
+	FROM media m
+	JOIN workshop_media wm ON m.id = wm.media_id
+	WHERE wm.workshop_id=$1;
+	`
+
+	var link []UploadedMedia
+	if err := s.db.Select(&link, linkQuery, id); err == nil {
+		event.UploadedMedia = link
+	}
+
+	// encode response
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write(data)
+	json.NewEncoder(w).Encode(event)
 }
 
 func (s *Server) PutWorkshop(w http.ResponseWriter, r *http.Request) {
@@ -142,7 +220,7 @@ func (s *Server) PutWorkshop(w http.ResponseWriter, r *http.Request) {
 	// 	endDate = endDateStr
 	// }
 
-	_, err = tx.Exec(updateQuery, r.FormValue("title"), r.FormValue("description"), r.FormValue("registrationLink"), r.FormValue("workshopType"), r.FormValue("startDate"), r.FormValue("registrationLink"), id)
+	_, err = tx.Exec(updateQuery, r.FormValue("title"), r.FormValue("description"), r.FormValue("registrationLink"), r.FormValue("workshopType"), r.FormValue("startDate"), r.FormValue("endDate"), id)
 
 	if err != nil {
 		fmt.Println(err)

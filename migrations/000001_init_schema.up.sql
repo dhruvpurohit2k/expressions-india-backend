@@ -1,7 +1,6 @@
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 CREATE TABLE IF NOT EXISTS enquiry(
-	id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+	id UUID PRIMARY KEY DEFAULT uuidv7(),
 	name VARCHAR(50) NOT NULL,
 	designation VARCHAR(100) NOT NULL,
 	email_id VARCHAR(225) NOT NULL UNIQUE,
@@ -12,7 +11,7 @@ CREATE TABLE IF NOT EXISTS enquiry(
 );
 
 -- CREATE TABLE IF NOT EXISTS activity(
--- 	id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+-- 	id UUID PRIMARY KEY DEFAULT uuidv7(),
 -- 	title VARCHAR(255) NOT NULL,
 -- 	start_date DATE NOT NULL,
 -- 	end_date DATE,
@@ -20,15 +19,29 @@ CREATE TABLE IF NOT EXISTS enquiry(
 -- 	created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 -- 	updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 -- );
+CREATE TYPE program_status AS ENUM ('upcoming','completed','cancelled');
 
 CREATE TABLE IF NOT EXISTS event(
-	id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+	id UUID PRIMARY KEY DEFAULT uuidv7(),
 	title VARCHAR(255) NOT NULL,
 	description TEXT,
+	perks JSON,
 	start_date DATE NOT NULL,
 	end_date DATE,
+	start_time TIME,
+	end_time TIME,
+	location TEXT NOT NULL,
+	is_paid BOOLEAN NOT NULL,
+	status program_status DEFAULT 'upcoming',
+	price INT,
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS home_page_image(
+	id UUID PRIMARY KEY DEFAULT uuidv7(),
+	url TEXT NOT NULL,
+	s3_key TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS workshop_type(
@@ -45,16 +58,33 @@ INSERT INTO workshop_type (name) VALUES
 	ON CONFLICT DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS workshop(
-	id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-	title VARCHAR(300) NOT NULL,
+	id UUID PRIMARY KEY DEFAULT uuidv7(),
+	title VARCHAR(255) NOT NULL,
+	description TEXT,
+	perks JSON,
 	start_date DATE NOT NULL,
 	end_date DATE,
-	description TEXT,
-	created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-	updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+	start_time TIME,
+	end_time TIME,
+	location TEXT,
+	is_paid BOOLEAN,
+	status program_status DEFAULT 'upcoming',
+	price INT,
 	workshop_type INT REFERENCES workshop_type(id) ON DELETE CASCADE,
-	registration_link TEXT
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+-- CREATE TABLE IF NOT EXISTS workshop(
+-- 	id UUID PRIMARY KEY DEFAULT uuidv7(),
+-- 	title VARCHAR(300) NOT NULL,
+-- 	start_date DATE NOT NULL,
+-- 	end_date DATE,
+-- 	description TEXT,
+-- 	created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+-- 	updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+-- 	workshop_type INT REFERENCES workshop_type(id) ON DELETE CASCADE,
+-- 	registration_link TEXT
+-- );
 
 CREATE TABLE IF NOT EXISTS user_type(
 	id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -77,7 +107,7 @@ CREATE TABLE IF NOT EXISTS user_workshop(
 
 
 CREATE TABLE IF NOT EXISTS journal(
-	id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+	id UUID PRIMARY KEY DEFAULT uuidv7(),
 	title TEXT NOT NULL,
 	start_date DATE NOT NULL,
 	end_date DATE NOT NULL,
@@ -88,7 +118,7 @@ CREATE TABLE IF NOT EXISTS journal(
 );
 
 CREATE TABLE IF NOT EXISTS journal_chapter(
-	id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+	id UUID PRIMARY KEY DEFAULT uuidv7(),
 	title TEXT NOT NULL,
 	journal_id UUID REFERENCES journal(id) ON DELETE CASCADE,
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -107,7 +137,7 @@ CREATE TABLE IF NOT EXISTS journal_chapter_author(
 );
 
 CREATE TABLE IF NOT EXISTS media(
-	id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+	id UUID PRIMARY KEY DEFAULT uuidv7(),
 	title TEXT,
 	media_type VARCHAR(20) NOT NULL,
 	s3_key VARCHAR(255) NOT NULL,
@@ -118,7 +148,7 @@ CREATE TABLE IF NOT EXISTS media(
 );
 
 CREATE TABLE IF NOT EXISTS album(
-	id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+	id UUID PRIMARY KEY DEFAULT uuidv7(),
 	name TEXT NOT NULL UNIQUE,
 	description TEXT,
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP

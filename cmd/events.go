@@ -6,10 +6,11 @@ import (
 	"net/http"
 )
 
-func (s *Server) GetEventList(w http.ResponseWriter, r *http.Request) {
-	query := `SELECT id,title,start_date,end_date FROM event LIMIT 10;`
+func (s *Server) GetUpcomingEvent(w http.ResponseWriter, r *http.Request) {
+	query := `SELECT id,title,start_date,end_date FROM event WHERE status='upcoming' LIMIT 10;`
 	events := []EventListItem{}
 	if err := s.db.Select(&events, query); err != nil {
+		fmt.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -90,27 +91,85 @@ func (s *Server) PostEvent(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) GetEvent(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	query := `SELECT id,title,description,start_date,end_date FROM event WHERE id=$1;`
-	event := EventDTO{}
-	if err := s.db.Get(&event, query, id); err != nil {
+
+	query := `
+	SELECT 
+		id,
+		title,
+		description,
+		perks,
+		start_date,
+		end_date,
+		start_time,
+		end_time,
+		location,
+		is_paid,
+		price
+	FROM event 
+	WHERE id=$1;
+	`
+
+	// temp struct to hold raw perks
+	type eventRow struct {
+		ID          string  `db:"id"`
+		Title       string  `db:"title"`
+		Description string  `db:"description"`
+		Perks       []byte  `db:"perks"`
+		StartDate   string  `db:"start_date"`
+		EndDate     *string `db:"end_date"`
+		StartTime   *string `db:"start_time"`
+		EndTime     *string `db:"end_time"`
+		Location    string  `db:"location"`
+		IsPaid      bool    `db:"is_paid"`
+		Price       *int    `db:"price"`
+	}
+
+	var row eventRow
+
+	if err := s.db.Get(&row, query, id); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	linkQuery := `
-			SELECT m.id,m.url
-			FROM media m
-			JOIN event_media em ON m.id = em.media_id
-		WHERE em.event_id=$1;
-		`
-	var link []UploadedMedia
-	s.db.Select(&link, linkQuery, id)
-	event.UploadedMedia = link
-	data, _ := json.Marshal(event)
 
+	var perks map[string]interface{}
+	if len(row.Perks) > 0 {
+		if err := json.Unmarshal(row.Perks, &perks); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	}
+
+	event := WorkshopDTO{
+		ID:          row.ID,
+		Title:       row.Title,
+		Description: row.Description,
+		Perks:       perks,
+		StartDate:   row.StartDate,
+		EndDate:     row.EndDate,
+		StartTime:   row.StartTime,
+		EndTime:     row.EndTime,
+		Location:    row.Location,
+		IsPaid:      row.IsPaid,
+		Price:       row.Price,
+	}
+
+	// media query (same as yours)
+	linkQuery := `
+	SELECT m.id, m.url
+	FROM media m
+	JOIN event_media em ON m.id = em.media_id
+	WHERE em.event_id=$1;
+	`
+
+	var link []UploadedMedia
+	if err := s.db.Select(&link, linkQuery, id); err == nil {
+		event.UploadedMedia = link
+	}
+
+	// encode response
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write(data)
-
+	json.NewEncoder(w).Encode(event)
 }
 func (s *Server) PutEvent(w http.ResponseWriter, r *http.Request) {
 	tx, err := s.db.Beginx()
@@ -136,7 +195,7 @@ func (s *Server) PutEvent(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	files := r.MultipartForm.File["images"]
+	files := r.MultipartForm.File["medias"]
 	for _, fileHeader := range files {
 		f, _ := fileHeader.Open()
 		defer f.Close()
@@ -165,7 +224,6 @@ func (s *Server) PutEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	deleteMedia := `DELETE FROM media WHERE id=$1 RETURNING s3_key`
 	deletedIds := r.MultipartForm.Value["deletedIds"]
-	fmt.Println(deletedIds)
 	for _, id := range deletedIds {
 		fmt.Println("DELETING", id)
 		var s3Key string

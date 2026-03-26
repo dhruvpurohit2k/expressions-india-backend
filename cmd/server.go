@@ -40,7 +40,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) SetupRoutes() {
-	s.mux.HandleFunc("GET /event", s.GetEventList)
+	s.mux.HandleFunc("GET /event/upcoming", s.GetUpcomingEvent)
 	s.mux.HandleFunc("GET /event/{id}", s.GetEvent)
 	s.mux.HandleFunc("POST /event", s.PostEvent)
 	s.mux.HandleFunc("PUT /event/{id}", s.PutEvent)
@@ -49,6 +49,9 @@ func (s *Server) SetupRoutes() {
 	s.mux.HandleFunc("PUT /workshop/{id}", s.PutWorkshop)
 	s.mux.HandleFunc("POST /workshop", s.PostWorkshop)
 	s.mux.HandleFunc("GET /workshop/types", s.GetWorkshopType)
+	s.mux.HandleFunc("GET /home/homepageimage", s.GetHomePageImage)
+	s.mux.HandleFunc("GET /api/home/images", s.GetHomePageImageClient)
+	s.mux.HandleFunc("PUT /home/homepageimage", s.UpdateHomePageImage)
 }
 
 func createServer() *Server {
@@ -134,10 +137,11 @@ func connectToS3() (*s3.Client, error) {
 func runMigrations(dbString string) error {
 	m, err := migrate.New(os.Getenv("MIGRATION_PATH"), dbString)
 	if err != nil {
-		fmt.Println("MIGRATION FAILED")
+		fmt.Println(err)
 		return err
 	}
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		fmt.Println(err)
 		return err
 	} else {
 		return nil

@@ -1,33 +1,33 @@
 package main
 
 type EventDTO struct {
-	ID            string                 `db:"id" json:"id"`
-	Title         string                 `db:"title" json:"title"`
-	Description   string                 `db:"description" json:"description"`
-	Perks         map[string]interface{} `json:"perks"`
-	StartDate     string                 `db:"start_date" json:"start_date"`
-	EndDate       *string                `db:"end_date" json:"end_date"`
-	StartTime     *string                `db:"start_time" json:"start_time"`
-	EndTime       *string                `db:"end_time" json:"end_time"`
-	Location      string                 `db:"location" json:"location"`
-	IsPaid        bool                   `db:"is_paid" json:"is_paid"`
-	Price         *int                   `db:"price" json:"price"`
-	UploadedMedia []UploadedMedia        `json:"uploaded_media"`
+	ID            string          `db:"id" json:"id"`
+	Title         string          `db:"title" json:"title"`
+	Description   string          `db:"description" json:"description"`
+	Perks         []string        `json:"perks"`
+	StartDate     string          `db:"start_date" json:"startDate"`
+	EndDate       *string         `db:"end_date" json:"endDate"`
+	StartTime     *string         `db:"start_time" json:"startTime"`
+	EndTime       *string         `db:"end_time" json:"endTime"`
+	Location      string          `db:"location" json:"location"`
+	IsPaid        bool            `db:"is_paid" json:"isPaid"`
+	Price         *int            `db:"price" json:"price"`
+	UploadedMedia []UploadedMedia `json:"uploadedMedia"`
 }
 type WorkshopDTO struct {
-	ID            string                 `db:"id" json:"id"`
-	Title         string                 `db:"title" json:"title"`
-	Description   string                 `db:"description" json:"description"`
-	Perks         map[string]interface{} `json:"perks"`
-	StartDate     string                 `db:"start_date" json:"start_date"`
-	EndDate       *string                `db:"end_date" json:"end_date"`
-	StartTime     *string                `db:"start_time" json:"start_time"`
-	EndTime       *string                `db:"end_time" json:"end_time"`
-	Location      string                 `db:"location" json:"location"`
-	IsPaid        bool                   `db:"is_paid" json:"is_paid"`
-	Price         *int                   `db:"price" json:"price"`
-	WorkshopType  int                    `db:"workshop_type" json:"workshopType"`
-	UploadedMedia []UploadedMedia        `json:"uploaded_media"`
+	ID            string          `db:"id" json:"id"`
+	Title         string          `db:"title" json:"title"`
+	Description   string          `db:"description" json:"description"`
+	Perks         []string        `json:"perks"`
+	StartDate     string          `db:"start_date" json:"startDate"`
+	EndDate       *string         `db:"end_date" json:"endDate"`
+	StartTime     *string         `db:"start_time" json:"startTime"`
+	EndTime       *string         `db:"end_time" json:"endTime"`
+	Location      string          `db:"location" json:"location"`
+	IsPaid        bool            `db:"is_paid" json:"isPaid"`
+	Price         *int            `db:"price" json:"price"`
+	WorkshopType  int             `db:"workshop_type" json:"workshopType"`
+	UploadedMedia []UploadedMedia `json:"uploadedMedia"`
 }
 
 type EventListItem struct {

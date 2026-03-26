@@ -158,7 +158,7 @@ func (s *Server) GetWorkshop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var perks map[string]interface{}
+	var perks []string
 	if len(row.Perks) > 0 {
 		if err := json.Unmarshal(row.Perks, &perks); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)

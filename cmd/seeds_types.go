@@ -17,17 +17,17 @@ type Media struct {
 }
 
 type EventSeed struct {
-	Title       string                 `json:"title"`
-	Description string                 `json:"description"`
-	Perks       map[string]interface{} `json:"perks"`
-	StartDate   string                 `json:"start_date"`
-	EndDate     *string                `json:"end_date"`
-	StartTime   *string                `json:"start_time"`
-	EndTime     *string                `json:"end_time"`
-	Location    string                 `json:"location"`
-	IsPaid      bool                   `json:"is_paid"`
-	Price       *int                   `json:"price"`
-	Medias      []string               `json:"medias"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Perks       []string `json:"perks"`
+	StartDate   string   `json:"start_date"`
+	EndDate     *string  `json:"end_date"`
+	StartTime   *string  `json:"start_time"`
+	EndTime     *string  `json:"end_time"`
+	Location    string   `json:"location"`
+	IsPaid      bool     `json:"is_paid"`
+	Price       *int     `json:"price"`
+	Medias      []string `json:"medias"`
 }
 
 type JournalSeed struct {
@@ -45,18 +45,18 @@ type JournalChapterSeed struct {
 }
 
 type WorkshopSeed struct {
-	Title        string         `json:"title"`
-	Description  string         `json:"description"`
-	Perks        map[string]any `json:"perks"`
-	StartDate    string         `json:"startDate"`
-	EndDate      *string        `json:"endDate"`
-	StartTime    *string        `json:"startTime"`
-	EndTime      *string        `json:"endTime"`
-	Location     string         `json:"location"`
-	IsPaid       *bool          `json:"is_paid"`
-	Price        *int           `json:"price"`
-	Medias       []string       `json:"medias"`
-	WorkshopType *int           `json:"type"`
-	Link         *string        `json:"link"`
-	Picture      *string        `json:"picture"`
+	Title        string   `json:"title"`
+	Description  string   `json:"description"`
+	Perks        []string `json:"perks"`
+	StartDate    string   `json:"startDate"`
+	EndDate      *string  `json:"endDate"`
+	StartTime    *string  `json:"startTime"`
+	EndTime      *string  `json:"endTime"`
+	Location     string   `json:"location"`
+	IsPaid       *bool    `json:"is_paid"`
+	Price        *int     `json:"price"`
+	Medias       []string `json:"medias"`
+	WorkshopType *int     `json:"type"`
+	Link         *string  `json:"link"`
+	Picture      *string  `json:"picture"`
 }

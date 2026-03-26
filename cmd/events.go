@@ -31,21 +31,37 @@ func (s *Server) PostEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	endDateStr := r.FormValue("endDate")
-
-	var endDate any
-
-	if endDateStr == "" {
-		endDate = nil
-	} else {
-		endDate = endDateStr
-	}
-
 	insertMedia := `INSERT INTO media (media_type,url,s3_key) VALUES ($1,$2,$3) ON CONFLICT (url) DO UPDATE SET url=EXCLUDED.url RETURNING id`
 	insertEventMedia := `INSERT INTO event_media (event_id,media_id) VALUES ($1,$2)`
-	insertEvent := `INSERT INTO EVENT (title,description,start_date,end_date) VALUES ($1,$2,$3,$4) RETURNING id`
+	insertEvent := `INSERT INTO EVENT 
+	(title,description,start_date,end_date,start_time,end_time,location,is_paid,price,perks)
+	VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`
+
+	var perks []string
+	if err := json.Unmarshal([]byte(r.FormValue("perks")), &perks); err != nil {
+		fmt.Println(err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	perksJson, err := json.Marshal(perks)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	var eventId string
-	err = tx.QueryRow(insertEvent, r.FormValue("title"), r.FormValue("description"), r.FormValue("startDate"), endDate).Scan(&eventId)
+	err = tx.QueryRow(
+		insertEvent,
+		r.FormValue("title"),
+		r.FormValue("description"),
+		r.FormValue("startDate"),
+		r.FormValue("endDate"),
+		r.FormValue("startTime"),
+		r.FormValue("endTime"),
+		r.FormValue("location"),
+		r.FormValue("isPaid"),
+		r.FormValue("price"),
+		perksJson,
+	).Scan(&eventId)
 	if err != nil {
 		fmt.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -91,7 +107,7 @@ func (s *Server) PostEvent(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) GetEvent(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-
+	fmt.Println(id)
 	query := `
 	SELECT 
 		id,
@@ -127,19 +143,21 @@ func (s *Server) GetEvent(w http.ResponseWriter, r *http.Request) {
 	var row eventRow
 
 	if err := s.db.Get(&row, query, id); err != nil {
+		fmt.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	var perks map[string]interface{}
+	var perks []string
 	if len(row.Perks) > 0 {
 		if err := json.Unmarshal(row.Perks, &perks); err != nil {
+			fmt.Println(err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 	}
 
-	event := WorkshopDTO{
+	event := EventDTO{
 		ID:          row.ID,
 		Title:       row.Title,
 		Description: row.Description,
@@ -222,8 +240,8 @@ func (s *Server) PutEvent(w http.ResponseWriter, r *http.Request) {
 		}
 
 	}
-	deleteMedia := `DELETE FROM media WHERE id=$1 RETURNING s3_key`
-	deletedIds := r.MultipartForm.Value["deletedIds"]
+	deleteMedia := `DELETE FROM media WHERE id=$1 RETURNING s3_key CASCADE`
+	deletedIds := r.MultipartForm.Value["deletedMediaIds"]
 	for _, id := range deletedIds {
 		fmt.Println("DELETING", id)
 		var s3Key string

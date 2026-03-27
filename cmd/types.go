@@ -3,8 +3,8 @@ package main
 type Activity struct {
 	Id        string  `json:"id" db:"id"`
 	Title     string  `json:"title" db:"title"`
-	StartDate string  `json:"start_date" db:"start_date"`
-	EndDate   *string `json:"end_date" db:"end_date"`
+	StartDate string  `json:"startDate" db:"start_date"`
+	EndDate   *string `json:"endDate" db:"end_date"`
 }
 
 type Enquiry struct {
@@ -21,15 +21,15 @@ type Enquiry struct {
 type Event struct {
 	Id        string  `json:"id" db:"id"`
 	Title     string  `json:"title" db:"title"`
-	StartDate string  `json:"start_date" db:"start_date"`
-	EndDate   *string `json:"end_date" db:"end_date"`
+	StartDate string  `json:"startDate" db:"start_date"`
+	EndDate   *string `json:"endDate" db:"end_date"`
 }
 
 type Workshop struct {
 	Id           string  `json:"id" db:"id"`
 	Name         string  `json:"name" db:"name"`
 	Description  string  `json:"description" db:"description"`
-	StartDate    string  `json:"start_date" db:"start_date"`
-	EndDate      *string `json:"end_date" db:"end_date"`
+	StartDate    string  `json:"startDate" db:"start_date"`
+	EndDate      *string `json:"endDate" db:"end_date"`
 	WorkshopType string  `json:"workshopType"`
 }

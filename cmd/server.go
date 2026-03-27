@@ -52,6 +52,7 @@ func (s *Server) SetupRoutes() {
 	s.mux.HandleFunc("GET /home/homepageimage", s.GetHomePageImage)
 	s.mux.HandleFunc("GET /api/home/images", s.GetHomePageImageClient)
 	s.mux.HandleFunc("PUT /home/homepageimage", s.UpdateHomePageImage)
+	s.mux.HandleFunc("POST /api/enquery", s.PostEnquiry)
 }
 
 func createServer() *Server {

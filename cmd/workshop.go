@@ -59,9 +59,22 @@ func (s *Server) PostWorkshop(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	insertWorkshop := `INSERT INTO workshop (title,description,workshop_type,start_date,end_date,registration_link) VALUES ($1,$2,$3,$4,NULLIF($5,'')::DATE,NULLIF($6,'')) RETURNING id`
+	insertWorkshop := `INSERT INTO workshop (title,description,workshop_type,start_date,end_date,start_time,end_time,location,is_paid,price,perks) VALUES ($1,$2,$3,$4,NULLIF($5,'')::DATE,NULLIF($6,'')::TIME,NULLIF($7,'')::TIME,$8,$9,NULLIF($10,'')::INT,$11) RETURNING id`
 	insertMedia := `INSERT INTO media (media_type,url,s3_key) VALUES ($1,$2,$3) ON CONFLICT (url) DO UPDATE SET url=EXCLUDED.url RETURNING id`
 	insertWorkshopMedia := `INSERT INTO workshop_media (workshop_id,media_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`
+
+	var perks []string
+	if err := json.Unmarshal([]byte(r.FormValue("perks")), &perks); err != nil {
+		fmt.Println("Error parsing perks:", err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	perksJson, err := json.Marshal(perks)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
 	var workshopId string
 	err = tx.QueryRow(insertWorkshop,
 		r.FormValue("title"),
@@ -69,7 +82,12 @@ func (s *Server) PostWorkshop(w http.ResponseWriter, r *http.Request) {
 		r.FormValue("workshopType"),
 		r.FormValue("startDate"),
 		r.FormValue("endDate"),
-		r.FormValue("registrationLink"),
+		r.FormValue("startTime"),
+		r.FormValue("endTime"),
+		r.FormValue("location"),
+		r.FormValue("isPaid"),
+		r.FormValue("price"),
+		perksJson,
 	).Scan(&workshopId)
 
 	if err != nil {
@@ -208,19 +226,36 @@ func (s *Server) PutWorkshop(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 	id := r.PathValue("id")
-	updateQuery := `UPDATE workshop SET title=$1, description=$2, registration_link=NULLIF($3,''), workshop_type=$4, start_date=$5, end_date=NULLIF($6,'')::DATE WHERE id=$7;`
+	updateQuery := `UPDATE workshop SET title=$1, description=$2, workshop_type=$3, start_date=$4, end_date=NULLIF($5,'')::DATE, start_time=NULLIF($6,'')::TIME, end_time=NULLIF($7,'')::TIME, location=$8, is_paid=$9, price=NULLIF($10,'')::INT, perks=$11 WHERE id=$12;`
 	insertWorkshopMedia := `INSERT INTO workshop_media (workshop_id,media_id) VALUES ($1,$2)`
 	insertMedia := `INSERT INTO media (media_type,url,s3_key) VALUES ($1,$2,$3) ON CONFLICT (url) DO UPDATE SET url=EXCLUDED.url RETURNING id`
 
-	// endDateStr := r.FormValue("endDate")
-	// var endDate any
-	// if endDateStr == "" {
-	// 	endDate = nil
-	// } else {
-	// 	endDate = endDateStr
-	// }
+	var perks []string
+	if err := json.Unmarshal([]byte(r.FormValue("perks")), &perks); err != nil {
+		fmt.Println("Error parsing perks:", err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	perksJson, err := json.Marshal(perks)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
-	_, err = tx.Exec(updateQuery, r.FormValue("title"), r.FormValue("description"), r.FormValue("registrationLink"), r.FormValue("workshopType"), r.FormValue("startDate"), r.FormValue("endDate"), id)
+	_, err = tx.Exec(updateQuery, 
+		r.FormValue("title"), 
+		r.FormValue("description"), 
+		r.FormValue("workshopType"), 
+		r.FormValue("startDate"), 
+		r.FormValue("endDate"),
+		r.FormValue("startTime"),
+		r.FormValue("endTime"),
+		r.FormValue("location"),
+		r.FormValue("isPaid"),
+		r.FormValue("price"),
+		perksJson,
+		id,
+	)
 
 	if err != nil {
 		fmt.Println(err)

@@ -7,7 +7,7 @@ import (
 )
 
 func (s *Server) GetUpcomingEvent(w http.ResponseWriter, r *http.Request) {
-	query := `SELECT id,title,start_date,end_date FROM event WHERE status='upcoming' LIMIT 10;`
+	query := `SELECT id,title,start_date,end_date FROM event WHERE status='upcoming' ORDER BY start_date LIMIT 10;`
 	events := []EventListItem{}
 	if err := s.db.Select(&events, query); err != nil {
 		fmt.Println(err)
@@ -197,18 +197,35 @@ func (s *Server) PutEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 	id := r.PathValue("id")
-	updateQuery := `UPDATE event SET title=$1, description=$2, start_date=$3, end_date=$4 WHERE id=$5;`
+	updateQuery := `UPDATE event SET title=$1, description=$2, start_date=$3, end_date=NULLIF($4,'')::DATE, start_time=NULLIF($5,'')::TIME, end_time=NULLIF($6,'')::TIME, location=$7, is_paid=$8, price=NULLIF($9,'')::INT, perks=$10 WHERE id=$11;`
 	insertEventMedia := `INSERT INTO event_media (event_id,media_id) VALUES ($1,$2)`
 	insertMedia := `INSERT INTO media (media_type,url,s3_key) VALUES ($1,$2,$3) ON CONFLICT (url) DO UPDATE SET url=EXCLUDED.url RETURNING id`
-	endDateStr := r.FormValue("endDate")
-	var endDate any
-	if endDateStr == "" {
-		endDate = nil
-	} else {
-		endDate = endDateStr
+
+	var perks []string
+	if err := json.Unmarshal([]byte(r.FormValue("perks")), &perks); err != nil {
+		fmt.Println("Error parsing perks:", err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	perksJson, err := json.Marshal(perks)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
-	_, err = tx.Exec(updateQuery, r.FormValue("title"), r.FormValue("description"), r.FormValue("startDate"), endDate, id)
+	_, err = tx.Exec(updateQuery,
+		r.FormValue("title"),
+		r.FormValue("description"),
+		r.FormValue("startDate"),
+		r.FormValue("endDate"),
+		r.FormValue("startTime"),
+		r.FormValue("endTime"),
+		r.FormValue("location"),
+		r.FormValue("isPaid"),
+		r.FormValue("price"),
+		perksJson,
+		id,
+	)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return

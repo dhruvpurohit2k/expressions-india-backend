@@ -1,0 +1,168 @@
+[
+{
+  "title": "Hands-on Workshop: Exploring Newer Understanding & Approaches to Specific Learning Disabilities",
+  "description": "A hands-on workshop focused on understanding specific learning disabilities (SLDs), including definitions, classifications, screening, diagnosis, interdisciplinary approaches, and remedial strategies for dyslexia, dyscalculia, and dysgraphia. Designed for aspirants in psychology and allied behavioral sciences.",
+  "perks": [
+    "Certificate of Honour & Completion",
+    "Basic academic material provided",
+      "Definitions, classifications and characteristics of SLDs",
+      "Childhood care & education advances in brain, mind & behavior",
+      "Needs and concerns of diverse learners (case studies)",
+      "Screening, identification and diagnosis of SLDs",
+      "Interdisciplinary approaches to SLD",
+      "Multiple intelligence and learning styles",
+      "Remedial strategies for dyslexia, dyscalculia and dysgraphia"
+    
+  ],
+  "start_date": "2026-03-21",
+  "end_date": "2026-03-21",
+  "start_time": "09:00:00",
+  "end_time": "17:30:00",
+  "location": "Library, Moolchand Medicity, Lajpat Nagar, New Delhi, India",
+  "is_paid": true,
+  "status": "upcoming",
+  "price": 800,
+  "medias" : ["1.png"]
+},
+{
+  "title": "2nd National Conference on Contemporary School Mental Health Initiatives",
+  "description": "A national conference focused on contemporary school mental health initiatives, aiming to bridge the gap with innovative best practices. The event includes keynotes, symposia, workshops, and paper presentations by students, mental health professionals, social scientists, and allied professionals.",
+  "perks": [
+    "Hybrid",
+    "Two days event",
+      "Keynotes",
+      "Symposia & Workshops",
+      "Paper presentations",
+      "Participation from school & university students",
+      "Mental health professionals",
+      "Social scientists and allied professionals",
+    "Transforming the wellbeing culture in education settings"
+  ],
+  "start_date": "2026-02-26",
+  "end_date": "2026-02-27",
+  "start_time": "09:00:00",
+  "end_time": "17:00:00",
+  "location": "New Delhi, India",
+  "is_paid": false,
+  "status": "upcoming",
+  "price": null,
+	"medias" : ["2.png"]
+},{
+  "title": "POCSO Act, Child & Adolescent Wellbeing",
+  "description": "An online workshop on counseling guidelines for teachers, counselors, and allied stakeholders focusing on the POCSO Act and child & adolescent wellbeing. The program covers legal awareness, child rights, safe space creation, counseling techniques, and prevention and management of child sexual abuse.",
+  "perks": [
+    "Online (Zoom)",
+    "E-Certificate (Citation of Honour)",
+    "Academic material provided",
+      "Day 1: Salient features of POCSO Act 2012",
+      "Day 2: Child rights and protection, creating safe spaces",
+      "Day 3: Counseling guidelines & techniques through case study discussion",
+      "Day 4: Prevention and management of child sexual abuse",
+    "Open to all (teachers, counselors, allied stakeholders)"
+  ],
+  "start_date": "2026-05-01",
+  "end_date": "2026-05-04",
+  "start_time": "18:30:00",
+  "end_time": "20:00:00",
+  "location": "Online (Zoom)",
+  "is_paid": false,
+  "status": "upcoming",
+  "price": null,
+	"medias" : ["3.png"]
+},
+{
+  "title": "IYFMF 2025: International Young Film Makers' Festival — Innovative Life Skills for Social Change",
+  "description": "A unique and innovative Life Skills based Film Festival of, for, and by school students, organised by Expressions India. An awesome opportunity for students to showcase and hone their creative & technical abilities through films on socially relevant themes.",
+  "perks": [
+    "Films created by school students on various socially relevant themes",
+    "Discussion & Interface with Media Experts, Educationists & Health Experts",
+    "Creative Life Skills Workshop",
+    "Dynamic guest lectures in media literacy & advocacy",
+    "No registration charge"
+  ],
+  "start_date": "2026-04-25",
+  "end_date": "2026-04-25",
+  "start_time": null,
+  "end_time": null,
+  "location": "India (venue TBD — organised by Expressions India)",
+  "is_paid": false,
+  "status": "upcoming",
+  "price": 0,
+  "medias": ["iyfmf_2025_poster.png"]
+},
+{
+  "title": "National MindSmart Conclave 2026: The Adolescent Peer Educators Leadership Programme in Life Skills, Holistic Health & Wellbeing",
+  "description": "A Three Part Hands-on Participatory Series focused on transforming the ecosystem of mental health & wellbeing in schools. Facilitated by Expressions India — The Life Skills & National School Mental Health Program. An intensive interface with national & international experts in adolescent development & life skills.",
+  "perks": [
+    "Student Empowerment Badge: Peer Ambassadors for Life Skills & Wellbeing",
+    "Certificate of Honour for peer educators and teacher delegates",
+    "School Recognition Citation as a National Life Skills Partner",
+    "Academic Handout Material for each student (for all 3 workshops)",
+    "Exclusive Sessions for Teachers & Counselors with Certificate",
+    "Part 1 (May 2026) - Understanding Self & Growing Up: The Journey of Adolescence, Growing Up Healthy, Building Resilience",
+    "Part 2 (July 2026) - Emotions, Identity & Social Connections: Express to Empower, From Anger to Awareness, Stronger Together",
+    "Part 3 (August 2026) - Future Readiness & Life Skills Leadership: Digital World Real You, Designing Your Future, Leading the Change",
+    "Launch of Young Wellbeing Scientists of India Program (YWSI)"
+  ],
+  "start_date": "2026-05-01",
+  "end_date": "2026-08-31",
+  "start_time": null,
+  "end_time": null,
+  "location": "India (National Conclave — venue TBD)",
+  "is_paid": true,
+  "status": "upcoming",
+  "price": null,
+  "medias": ["mindsmart_2026_poster.png"]
+},
+  {
+    "title": "Manasvita",
+    "summary": "National inter-school wellness quiz.",
+    "description": "An inter-school competition focusing on health, wellbeing, and psychology.",
+    "status": "upcoming",
+    "start_date": "2026-08-01",
+    "end_date": null,
+    "location": "India",
+    "is_paid": false,
+    "price": null,
+    "perks": [
+      "Quiz competition",
+      "Wellness awareness",
+      "Student participation"
+    ]
+    ,"medias":["expressionsindialogo.png"]
+  },
+  {
+    "title": "International Adolescent Leadership Summit",
+    "summary": "Leadership summit on resilience and mental health.",
+    "description": "A global summit with youth parliament and mental health sessions.",
+    "status": "upcoming",
+    "start_date": "2026-12-01",
+    "end_date": null,
+    "location": "India",
+    "is_paid": true,
+    "price": null,
+    "perks": [
+      "Leadership sessions",
+      "Youth parliament",
+      "Mental health discussions"
+    ]
+    ,"medias":["expressionsindialogo.png"]
+  },
+  {
+    "title": "International Conference on School Mental Health",
+    "summary": "Global conference on school mental health.",
+    "description": "A conference addressing best practices in school mental health.",
+    "status": "upcoming",
+    "start_date": "2026-12-01",
+    "end_date": null,
+    "location": "India",
+    "is_paid": true,
+    "price": null,
+    "perks": [
+      "Global experts",
+      "Policy discussions",
+      "Workshops and panels"
+    ]
+    ,"medias":["expressionsindialogo.png"]
+  }
+]

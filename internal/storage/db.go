@@ -6,7 +6,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/dhruvpurohit2k/expressions-india-backend/internal/models"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -15,7 +14,6 @@ import (
 
 func InitDB() *gorm.DB {
 	env := os.Getenv("APP_ENV")
-	freshStart := os.Getenv("DB_FRESH_START") == "true"
 	var db *gorm.DB
 	var err error
 	if env == "production" {
@@ -36,10 +34,6 @@ func InitDB() *gorm.DB {
 	}
 	if err != nil {
 		log.Fatal("Could not open DB", err.Error())
-	}
-
-	if env == "development" && freshStart {
-		db.Migrator().DropTable(&models.Event{}, &models.Media{})
 	}
 	sqlDB, _ := db.DB()
 	sqlDB.SetMaxIdleConns(10)

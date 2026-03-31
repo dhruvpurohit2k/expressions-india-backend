@@ -113,3 +113,10 @@ func (s *S3) DeleteFromS3(s3Key string) error {
 	}
 	return nil
 }
+
+func (s *S3) Delete(s3Key string) error {
+	if err := s.DeleteFromS3(s3Key); err != nil {
+		return err
+	}
+	return nil
+}

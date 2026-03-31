@@ -1,8 +1,9 @@
 package main
 
 import (
-	"github.com/joho/godotenv"
 	"log"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
@@ -14,6 +15,9 @@ func main() {
 	server.SetupRoutes()
 	if err := SeedDBWithEvent(server, "./data/events/events.json"); err != nil {
 		log.Println("Failed to seed data", err.Error(), ".\nSkipping")
+	}
+	if err := SeedJournal(server, "./data/journal/journals.json"); err != nil {
+		log.Println("Failed to seed journal", err.Error(), ".\nSkipping")
 	}
 	server.r.Run(":8000")
 }

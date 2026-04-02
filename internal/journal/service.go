@@ -3,11 +3,13 @@ package journal
 import (
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/dto"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/models"
+	"github.com/dhruvpurohit2k/expressions-india-backend/internal/storage"
 	"gorm.io/gorm"
 )
 
 type Service struct {
 	db *gorm.DB
+	s3 *storage.S3
 }
 
 func (s *Service) GetAllJournals() ([]models.Journal, error) {
@@ -44,6 +46,41 @@ func (s *Service) GetJournalById(id string) (models.Journal, error) {
 	return journal, nil
 }
 
-func NewService(db *gorm.DB) *Service {
-	return &Service{db: db}
+func (s *Service) DeleteJournal(id string) error {
+	var journal models.Journal
+	if err := s.db.Preload("Media").Preload("Chapters").Preload("Chapters.Media").Preload("Chapters.Authors").First(&journal, "id = ?", id).Error; err != nil {
+		return err
+	}
+
+	for _, chapter := range journal.Chapters {
+		if err := s.db.Model(&chapter).Association("Authors").Clear(); err != nil {
+			return err
+		}
+		if chapter.MediaId != nil {
+			if err := s.db.Delete(&models.Media{}, "id = ?", *chapter.MediaId).Error; err != nil {
+				return err
+			}
+			if err := s.s3.Delete(*chapter.MediaId); err != nil {
+				return err
+			}
+		}
+		if err := s.db.Delete(&chapter).Error; err != nil {
+			return err
+		}
+	}
+
+	if journal.MediaId != nil {
+		if err := s.db.Delete(&models.Media{}, "id = ?", *journal.MediaId).Error; err != nil {
+			return err
+		}
+		if err := s.s3.Delete(*journal.MediaId); err != nil {
+			return err
+		}
+	}
+
+	return s.db.Delete(&journal).Error
+}
+
+func NewService(db *gorm.DB, s3 *storage.S3) *Service {
+	return &Service{db: db, s3: s3}
 }

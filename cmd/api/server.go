@@ -73,7 +73,7 @@ func initServer() *Server {
 	promotionService := promotion.NewService(db)
 	promotionController := promotion.NewController(promotionService)
 
-	journalsService := journal.NewService(db)
+	journalsService := journal.NewService(db, s3)
 	journalsController := journal.NewController(journalsService)
 
 	podcastService := podcast.NewService(db)
@@ -109,11 +109,22 @@ func (s *Server) SetupRoutes() {
 		groupAdmin.GET("/event/:id", s.eventController.GetEventById)
 		groupAdmin.POST("/event", s.eventController.Create)
 		groupAdmin.PUT("/event/:id", s.eventController.Update)
+		groupAdmin.DELETE("/event/:id", s.eventController.Delete)
+
 		groupAdmin.GET("/journal", s.journalController.GetList)
 		groupAdmin.GET("/journal/:id", s.journalController.GetById)
+		groupAdmin.DELETE("/journal/:id", s.journalController.Delete)
 		groupAdmin.GET("/promotion", s.promotionController.Get)
+		groupAdmin.GET("/promotion/:id", s.promotionController.GetById)
+
 		groupAdmin.GET("/podcast", s.podcastController.Get)
+		groupAdmin.GET("/podcast/:id", s.podcastController.GetById)
+		groupAdmin.POST("/podcast", s.podcastController.Create)
+		groupAdmin.DELETE("/podcast/:id", s.podcastController.Delete)
+
 		groupAdmin.GET("/enquiry", s.enquiryController.Get)
+		groupAdmin.GET("/enquiry/:id", s.enquiryController.GetById)
+		groupAdmin.DELETE("/enquiry/:id", s.enquiryController.Delete)
 
 		// groupAdmin.POST("/event")
 	}

@@ -14,6 +14,6 @@ type Podcast struct {
 	Tags        datatypes.JSON `json:"tags"`
 	Transcript  *string        `json:"transcript"`
 	Audiences   []Audience     `gorm:"many2many:podcast_audience;" json:"audience"`
-	CreatedAt   time.Time      `gorm:"not null" json:"created_at"`
-	UpdatedAt   time.Time      `gorm:"not null" json:"updated_at"`
+	CreatedAt   time.Time      `gorm:"not null" json:"createdAt"`
+	UpdatedAt   time.Time      `gorm:"not null" json:"updatedAt"`
 }

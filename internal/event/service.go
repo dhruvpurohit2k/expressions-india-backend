@@ -280,6 +280,49 @@ func (s *Service) appendMedia(event *models.Event, files []*multipart.FileHeader
 	return nil
 }
 
+func (s *Service) DeleteEvent(id string) error {
+	var event models.Event
+	if err := s.db.Preload("PromotionalMedia").Preload("Medias").Preload("Documents").Preload("VideoLinks").Preload("Audiences").First(&event, "id = ?", id).Error; err != nil {
+		return err
+	}
+
+	allMedia := append(append(event.PromotionalMedia, event.Medias...), event.Documents...)
+	videoLinks := event.VideoLinks
+
+	if err := s.db.Model(&event).Association("PromotionalMedia").Clear(); err != nil {
+		return err
+	}
+	if err := s.db.Model(&event).Association("Medias").Clear(); err != nil {
+		return err
+	}
+	if err := s.db.Model(&event).Association("Documents").Clear(); err != nil {
+		return err
+	}
+	if err := s.db.Model(&event).Association("VideoLinks").Clear(); err != nil {
+		return err
+	}
+	if err := s.db.Model(&event).Association("Audiences").Clear(); err != nil {
+		return err
+	}
+
+	for _, media := range allMedia {
+		if err := s.db.Delete(&models.Media{}, "id = ?", media.ID).Error; err != nil {
+			return err
+		}
+		if err := s.s3.Delete(media.ID); err != nil {
+			return err
+		}
+	}
+
+	for _, link := range videoLinks {
+		if err := s.db.Delete(&models.Link{}, "id = ?", link.ID).Error; err != nil {
+			return err
+		}
+	}
+
+	return s.db.Delete(&event).Error
+}
+
 func (s *Service) getLink(eventID string, links []string) ([]models.Link, error) {
 	var videoLinks []models.Link
 	for _, link := range links {

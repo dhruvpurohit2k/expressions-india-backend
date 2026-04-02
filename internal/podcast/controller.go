@@ -43,6 +43,15 @@ func (ctrl *Controller) GetById(c *gin.Context) {
 	utils.OK(c, podcast)
 }
 
+func (ctrl *Controller) Delete(c *gin.Context) {
+	id := c.Param("id")
+	if err := ctrl.service.DeletePodcast(id); err != nil {
+		utils.Fail(c, http.StatusInternalServerError, "DELETE_ERROR", "Failed to delete podcast")
+		return
+	}
+	utils.OK(c, nil)
+}
+
 func (ctrl *Controller) Create(c *gin.Context) {
 	var dto dto.PodcastCreateDTO
 	if err := c.ShouldBind(&dto); err != nil {

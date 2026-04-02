@@ -32,6 +32,18 @@ func (s *Service) GetEnquiryList() ([]dto.EnquiryListItemDTO, error) {
 	return result, nil
 }
 
+func (s *Service) GetEnquiryById(id string) (*models.Enquiry, error) {
+	var enquiry models.Enquiry
+	if err := s.db.First(&enquiry, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return &enquiry, nil
+}
+
+func (s *Service) DeleteEnquiry(id string) error {
+	return s.db.Delete(&models.Enquiry{}, "id = ?", id).Error
+}
+
 func (s *Service) CreateEnquiry(enquiry *dto.EnquiryCreateDTO) error {
 	return s.db.Create(&models.Enquiry{
 		ID:      uuid.Must(uuid.NewV7()).String(),

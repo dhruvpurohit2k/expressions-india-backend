@@ -29,6 +29,25 @@ func (ctrl *Controller) Get(c *gin.Context) {
 	utils.OK(c, enquiries)
 }
 
+func (ctrl *Controller) GetById(c *gin.Context) {
+	id := c.Param("id")
+	enquiry, err := ctrl.service.GetEnquiryById(id)
+	if err != nil {
+		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Error fetching enquiry")
+		return
+	}
+	utils.OK(c, enquiry)
+}
+
+func (ctrl *Controller) Delete(c *gin.Context) {
+	id := c.Param("id")
+	if err := ctrl.service.DeleteEnquiry(id); err != nil {
+		utils.Fail(c, http.StatusInternalServerError, "DELETE_ERROR", "Error deleting enquiry")
+		return
+	}
+	utils.OK(c, nil)
+}
+
 func (ctrl *Controller) CreateEnquiry(c *gin.Context) {
 	var enquiry dto.EnquiryCreateDTO
 	if err := c.ShouldBind(&enquiry); err != nil {

@@ -77,6 +77,15 @@ func (ctrl *Controller) Update(c *gin.Context) {
 	utils.OK(c, updateEvent)
 
 }
+func (ctrl *Controller) Delete(c *gin.Context) {
+	id := c.Param("id")
+	if err := ctrl.service.DeleteEvent(id); err != nil {
+		utils.Fail(c, http.StatusInternalServerError, "DELETE_ERROR", "Could not delete event: "+err.Error())
+		return
+	}
+	utils.OK(c, nil)
+}
+
 func (ctrl *Controller) GetEventById(c *gin.Context) {
 	id := c.Param("id")
 	event, err := ctrl.service.GetEventById(id)

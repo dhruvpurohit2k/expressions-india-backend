@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/dhruvpurohit2k/expressions-india-backend/internal/enquiry"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/event"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/journal"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/models"
@@ -25,6 +26,7 @@ type Server struct {
 	promotionController *promotion.Controller
 	journalController   *journal.Controller
 	podcastController   *podcast.Controller
+	enquiryController   *enquiry.Controller
 }
 
 func initServer() *Server {
@@ -43,6 +45,7 @@ func initServer() *Server {
 			&models.JournalChapter{},
 			&models.Author{},
 			&models.Podcast{},
+			&models.Enquiry{},
 		)
 	}
 	err := db.AutoMigrate(
@@ -55,10 +58,14 @@ func initServer() *Server {
 		&models.JournalChapter{},
 		&models.Author{},
 		&models.Podcast{},
+		&models.Enquiry{},
 	)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
 
 	models.SeedAudience(db)
-	models.SeedPromotions(db, s3)
+	// models.SeedPromotions(db, s3)
 
 	eventService := *event.NewService(db, s3)
 	eventController := event.NewController(eventService)
@@ -72,9 +79,9 @@ func initServer() *Server {
 	podcastService := podcast.NewService(db)
 	podcastController := podcast.NewController(podcastService)
 
-	if err != nil {
-		log.Fatal(err.Error())
-	}
+	enquiryService := enquiry.NewService(db)
+	enquiryController := enquiry.NewController(enquiryService)
+
 	r := gin.Default()
 	r.Use(cors.Default())
 	return &Server{
@@ -85,6 +92,7 @@ func initServer() *Server {
 		promotionController: promotionController,
 		journalController:   journalsController,
 		podcastController:   podcastController,
+		enquiryController:   enquiryController,
 	}
 }
 
@@ -101,9 +109,11 @@ func (s *Server) SetupRoutes() {
 		groupAdmin.GET("/event/:id", s.eventController.GetEventById)
 		groupAdmin.POST("/event", s.eventController.Create)
 		groupAdmin.PUT("/event/:id", s.eventController.Update)
-		groupAdmin.GET("/journal", s.journalController.Get)
+		groupAdmin.GET("/journal", s.journalController.GetList)
+		groupAdmin.GET("/journal/:id", s.journalController.GetById)
 		groupAdmin.GET("/promotion", s.promotionController.Get)
 		groupAdmin.GET("/podcast", s.podcastController.Get)
+		groupAdmin.GET("/enquiry", s.enquiryController.Get)
 
 		// groupAdmin.POST("/event")
 	}

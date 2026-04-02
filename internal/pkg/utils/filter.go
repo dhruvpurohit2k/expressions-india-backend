@@ -45,7 +45,7 @@ func ByOnline(online bool) func(db *gorm.DB) *gorm.DB {
 	}
 }
 
-func ApplyFilters(query *gorm.DB, filter Filter) *gorm.DB {
+func ApplyEventListFilters(query *gorm.DB, filter Filter) *gorm.DB {
 	return query.Scopes(
 		ByStatus(filter.Status),
 		BySearch(filter.Search),

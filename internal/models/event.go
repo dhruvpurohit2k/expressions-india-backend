@@ -21,6 +21,7 @@ type Event struct {
 	IsOnline         bool           `gorm:"default:false" json:"isOnline"`
 	IsPaid           bool           `gorm:"default:false" json:"isPaid"`
 	Price            *int           `json:"price"`
+	Status           *string        `gorm:"type:varchar(255)" json:"status"`
 	CreatedAt        time.Time      `json:"createdAt"`
 	UpdatedAt        time.Time      `json:"updatedAt"`
 	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`

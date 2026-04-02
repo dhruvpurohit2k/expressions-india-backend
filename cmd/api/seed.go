@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
+	"log"
 	"os"
 	"path"
 	"time"
@@ -36,9 +36,10 @@ func SeedDBWithEvent(s *Server, filepath string) error {
 		return err
 	}
 	var allAudience models.Audience
-	if err := s.db.Where("name = ?", "All").First(&allAudience).Error; err != nil {
+	if err := s.db.Where("name = ?", "all").First(&allAudience).Error; err != nil {
 		return err
 	}
+	status := "upcoming"
 	for _, d := range eventSeeds {
 		eventID, _ := uuid.NewV7()
 		perksBlob, _ := json.Marshal(d.Perks)
@@ -51,12 +52,15 @@ func SeedDBWithEvent(s *Server, filepath string) error {
 			}
 			promotionalMedia = append(promotionalMedia, models.Media{
 				ID:       id,
-				EventID:  eventID.String(),
 				URL:      location,
-				Key:      id,
 				FileType: "image/png",
-				Category: "PROMOTION",
 			})
+		}
+		startDate, _ := time.Parse("2006-01-02", d.StartDate)
+		var endDate *time.Time
+		if d.EndDate != nil {
+			endDateParsed, _ := time.Parse("2006-01-02", *d.EndDate)
+			endDate = &endDateParsed
 		}
 		event := &models.Event{
 			ID:               eventID.String(),
@@ -66,6 +70,11 @@ func SeedDBWithEvent(s *Server, filepath string) error {
 			Location:         &d.Location,
 			IsPaid:           d.IsPaid,
 			Price:            d.Price,
+			StartDate:        startDate,
+			Status:           &status,
+			EndDate:          endDate,
+			StartTime:        d.StartTime,
+			EndTime:          d.EndTime,
 			PromotionalMedia: promotionalMedia,
 			Audiences:        []models.Audience{allAudience},
 		}
@@ -85,6 +94,18 @@ func SeedJournal(s *Server, filePath string) error {
 	}
 
 	for _, seed := range journalSeeds {
+		mediaPath := path.Join("./data/journal/media/", seed.Title)
+		wholePaper := &models.Media{
+			ID:       uuid.Must(uuid.NewV7()).String(),
+			FileType: "application/pdf",
+		}
+		location, _, err := s.s3.UploadLocal(path.Join(mediaPath, "journal.pdf"))
+		if err != nil {
+			log.Print(err.Error())
+		}
+		wholePaper.URL = location
+		s.db.Create(wholePaper)
+
 		startTime, err := time.Parse("2006-01-02", seed.StartDate)
 		if err != nil {
 			return err
@@ -93,24 +114,49 @@ func SeedJournal(s *Server, filePath string) error {
 		if err != nil {
 			return err
 		}
-		chapters := make([]models.JournalChapter, len(seed.Chapters))
+		chapters := make([]models.JournalChapter, len(seed.Chapters)+1)
+		prefaceMedia := &models.Media{
+			ID:       uuid.Must(uuid.NewV7()).String(),
+			FileType: "application/pdf",
+		}
+
+		location, _, err = s.s3.UploadLocal(path.Join(mediaPath, "prelimenry.pdf"))
+		if err != nil {
+			log.Print(err.Error())
+		}
+		prefaceMedia.URL = location
+		chapters[0] = models.JournalChapter{
+			Title:   "Preface",
+			Authors: nil,
+			Media:   *prefaceMedia,
+		}
 		for i, chapter := range seed.Chapters {
 			authors := make([]models.Author, len(chapter.Authors))
 			for j, author := range chapter.Authors {
 				s.db.Where(models.Author{Name: author}).FirstOrCreate(&authors[j], models.Author{Name: author})
 			}
-			chapters[i] = models.JournalChapter{
+			media := &models.Media{
+				ID:       uuid.Must(uuid.NewV7()).String(),
+				FileType: "application/pdf",
+			}
+			location, _, err = s.s3.UploadLocal(path.Join(mediaPath, chapter.File))
+			if err != nil {
+				log.Print(err.Error())
+			}
+			media.URL = location
+			chapters[i+1] = models.JournalChapter{
 				Title:   chapter.Name,
 				Authors: authors,
+				Media:   *media,
 			}
 		}
-		fmt.Println(chapters)
 		journal := models.Journal{
 			Title:      seed.Title,
 			StartMonth: startTime.Month().String(),
 			EndMonth:   endTime.Month().String(),
 			Year:       startTime.Year(),
 			Volume:     seed.Volume,
+			Media:      *wholePaper,
 			Issue:      seed.Issue,
 			Chapters:   chapters,
 		}

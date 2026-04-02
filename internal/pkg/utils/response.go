@@ -1,8 +1,9 @@
 package utils
 
 import (
-	"github.com/gin-gonic/gin"
 	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
 
 type Response struct {
@@ -19,9 +20,9 @@ type ErrorInfo struct {
 
 type Meta struct {
 	Page       int   `json:"page,omitempty"`
-	PerPage    int   `json:"per_page,omitempty"`
+	PerPage    int   `json:"perPage,omitempty"`
 	Total      int64 `json:"total,omitempty"`
-	TotalPages int   `json:"total_pages,omitempty"`
+	TotalPages int   `json:"totalPages,omitempty"`
 }
 
 func OK(c *gin.Context, data any) {

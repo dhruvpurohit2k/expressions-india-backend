@@ -39,16 +39,25 @@ func (s *Service) GetAllEvents() ([]models.Event, error) {
 	return events, err
 }
 
-func (s *Service) GetEventById(id string) (*models.Event, error) {
+func (s *Service) GetEventById(id string) (*dto.EventDTO, error) {
 	var event models.Event
-	err := s.db.Where("id = ?", id).Preload("Medias", "category = ?", "MEDIA").
-		Preload("Documents", "category = ?", "DOCUMENT").
+	err := s.db.Where("id = ?", id).Preload("Medias").
+		Preload("Documents").
 		Preload("VideoLinks").
-		Preload("PromotionalMedia", "category = ?", "PROMOTION").
+		Preload("PromotionalMedia").
 		Preload("Audiences").
 		First(&event).Error
 
-	return &event, err
+	var audiences []string
+	for _, audience := range event.Audiences {
+		audiences = append(audiences, audience.Name)
+	}
+	result := &dto.EventDTO{
+		Event:     event,
+		Audiences: audiences,
+	}
+
+	return result, err
 }
 
 func (s *Service) CreateEvent(data *dto.EventCreateRequestDTO) error {
@@ -62,6 +71,7 @@ func (s *Service) CreateEvent(data *dto.EventCreateRequestDTO) error {
 	newEvent.EndDate = data.EndDate
 	newEvent.StartTime = data.StartTime
 	newEvent.EndTime = data.EndTime
+	newEvent.Status = data.Status
 	newEvent.Location = data.Location
 	if data.IsOnline != nil {
 		newEvent.IsOnline = *data.IsOnline
@@ -115,7 +125,7 @@ func (s *Service) CreateEvent(data *dto.EventCreateRequestDTO) error {
 func (s *Service) GetEventList(eventFilter utils.Filter) ([]dto.EventListItemDTO, error) {
 	var events []models.Event
 
-	query := utils.ApplyFilters(s.db.Model(&models.Event{}), eventFilter)
+	query := utils.ApplyEventListFilters(s.db.Model(&models.Event{}), eventFilter)
 
 	err := query.Find(&events).Error
 
@@ -127,7 +137,6 @@ func (s *Service) GetEventList(eventFilter utils.Filter) ([]dto.EventListItemDTO
 			Title:     event.Title,
 			IsOnline:  event.IsOnline,
 			IsPaid:    event.IsPaid,
-			Price:     event.Price,
 			StartDate: event.StartDate,
 			EndDate:   event.EndDate,
 		})
@@ -149,6 +158,7 @@ func (s Service) UpdateEvent(id string, newData *dto.EventUpdateRequestDTO) erro
 	event.StartTime = newData.StartTime
 	event.EndTime = newData.EndTime
 	event.Location = newData.Location
+	event.Status = newData.Status
 	if newData.IsOnline != nil {
 		event.IsOnline = *newData.IsOnline
 	} else {
@@ -229,7 +239,7 @@ func (s *Service) appendPromotionalMedia(event *models.Event, files []*multipart
 		if err != nil {
 			return err
 		}
-		event.PromotionalMedia = append(event.PromotionalMedia, models.Media{ID: key, URL: location, Key: key, EventID: event.ID, Category: "PROMOTION"})
+		event.PromotionalMedia = append(event.PromotionalMedia, models.Media{ID: key, URL: location})
 		f.Close()
 	}
 
@@ -246,7 +256,7 @@ func (s *Service) appendDocument(event *models.Event, files []*multipart.FileHea
 		if err != nil {
 			return err
 		}
-		event.Documents = append(event.Documents, models.Media{ID: key, URL: location, Key: key, EventID: event.ID, Category: "DOCUMENT"})
+		event.Documents = append(event.Documents, models.Media{ID: key, URL: location})
 		f.Close()
 	}
 
@@ -263,7 +273,7 @@ func (s *Service) appendMedia(event *models.Event, files []*multipart.FileHeader
 		if err != nil {
 			return err
 		}
-		event.Medias = append(event.Medias, models.Media{ID: key, URL: location, Key: key, EventID: event.ID, Category: "MEDIA"})
+		event.Medias = append(event.Medias, models.Media{ID: key, URL: location})
 		f.Close()
 	}
 
@@ -274,9 +284,8 @@ func (s *Service) getLink(eventID string, links []string) ([]models.Link, error)
 	var videoLinks []models.Link
 	for _, link := range links {
 		link := models.Link{
-			ID:      uuid.Must(uuid.NewV7()).String(),
-			URL:     link,
-			EventID: eventID,
+			ID:  uuid.Must(uuid.NewV7()).String(),
+			URL: link,
 		}
 		videoLinks = append(videoLinks, link)
 	}

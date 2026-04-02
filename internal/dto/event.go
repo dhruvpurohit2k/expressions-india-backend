@@ -3,6 +3,8 @@ package dto
 import (
 	"mime/multipart"
 	"time"
+
+	"github.com/dhruvpurohit2k/expressions-india-backend/internal/models"
 )
 
 type EventListItemDTO struct {
@@ -10,11 +12,13 @@ type EventListItemDTO struct {
 	Title     string     `json:"title"`
 	IsOnline  bool       `json:"isOnline"`
 	IsPaid    bool       `json:"isPaid"`
-	Price     *int       `json:"price"`
 	StartDate time.Time  `json:"startDate"`
 	EndDate   *time.Time `json:"endDate"`
 }
-
+type EventDTO struct {
+	models.Event
+	Audiences []string `json:"audiences"`
+}
 type EventCreateRequestDTO struct {
 	Title            string                  `form:"title" binding:"required"`
 	Description      string                  `form:"description"`
@@ -32,7 +36,8 @@ type EventCreateRequestDTO struct {
 	Medias           []*multipart.FileHeader `form:"medias"`
 	Documents        []*multipart.FileHeader `form:"documents"`
 	VideoLinks       []string                `form:"videoLinks"`
-	Audiences        []string                `form:"audiences"`
+	Audiences        []string                `form:"audiences" binding:"required"`
+	Status           *string                 `form:"status" binding:"required"`
 }
 
 type EventUpdateRequestDTO struct {
@@ -55,5 +60,6 @@ type EventUpdateRequestDTO struct {
 	Medias                     []*multipart.FileHeader `form:"medias"`
 	Documents                  []*multipart.FileHeader `form:"documents"`
 	VideoLinks                 []string                `form:"videoLinks"`
-	Audiences                  []string                `form:"audiences"`
+	Audiences                  []string                `form:"audiences" binding:"required"`
+	Status                     *string                 `form:"status" binding:"required"`
 }

@@ -9,13 +9,13 @@ type Audience struct {
 
 func SeedAudience(db *gorm.DB) {
 	options := []Audience{
-		{Name: "All"},
-		{Name: "Student"},
-		{Name: "Teacher"},
-		{Name: "Head Of Department"},
-		{Name: "Parent"},
-		{Name: "Counselor"},
-		{Name: "Mental Health Professional"},
+		{Name: "all"},
+		{Name: "student"},
+		{Name: "teacher"},
+		{Name: "head_of_department"},
+		{Name: "parent"},
+		{Name: "counselor"},
+		{Name: "mental_health_professional"},
 	}
 	for _, opt := range options {
 		db.FirstOrCreate(&opt, Audience{Name: opt.Name})

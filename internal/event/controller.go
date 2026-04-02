@@ -1,6 +1,7 @@
 package event
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/dto"
@@ -52,6 +53,11 @@ func (ctrl *Controller) GetEventList(c *gin.Context) {
 	events, err := ctrl.service.GetEventList(filter)
 	if err != nil {
 		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Could not retrive events: "+err.Error())
+		return
+	}
+	fmt.Println(events)
+	if len(events) == 0 {
+		utils.OK(c, &[]dto.EventListItemDTO{})
 		return
 	}
 	utils.OK(c, events)

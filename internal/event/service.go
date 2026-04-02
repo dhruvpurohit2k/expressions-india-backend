@@ -44,6 +44,7 @@ func (s *Service) GetEventById(id string) (*dto.EventDTO, error) {
 	err := s.db.Where("id = ?", id).Preload("Medias").
 		Preload("Documents").
 		Preload("VideoLinks").
+		Preload("PromotionalVideoLinks").
 		Preload("PromotionalMedia").
 		Preload("Audiences").
 		First(&event).Error
@@ -166,10 +167,14 @@ func (s Service) UpdateEvent(id string, newData *dto.EventUpdateRequestDTO) erro
 	}
 	if newData.IsPaid != nil {
 		event.IsPaid = *newData.IsPaid
-		if newData.Price != nil {
-			event.Price = newData.Price
+		if *newData.IsPaid {
+			if newData.Price != nil {
+				event.Price = newData.Price
+			} else {
+				return errors.New("price is required for paid events")
+			}
 		} else {
-			return errors.New("price is required for paid events")
+			event.Price = nil
 		}
 	} else {
 		event.IsPaid = false

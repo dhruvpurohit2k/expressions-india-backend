@@ -20,24 +20,25 @@ type EventDTO struct {
 	Audiences []string `json:"audiences"`
 }
 type EventCreateRequestDTO struct {
-	Title            string                  `form:"title" binding:"required"`
-	Description      string                  `form:"description"`
-	Perks            string                  `form:"perks"`
-	StartDate        time.Time               `form:"startDate" binding:"required"`
-	EndDate          *time.Time              `form:"endDate"`
-	StartTime        *string                 `form:"startTime"`
-	EndTime          *string                 `form:"endTime"`
-	Location         *string                 `form:"location"`
-	RegistrationURL  *string                 `form:"registrationUrl" binding:"required"`
-	IsOnline         *bool                   `form:"isOnline" binding:"required"`
-	IsPaid           *bool                   `form:"isPaid" binding:"required"`
-	Price            *int                    `form:"price"`
-	PromotionalMedia []*multipart.FileHeader `form:"promotionalMedia"`
-	Medias           []*multipart.FileHeader `form:"medias"`
-	Documents        []*multipart.FileHeader `form:"documents"`
-	VideoLinks       []string                `form:"videoLinks"`
-	Audiences        []string                `form:"audiences" binding:"required"`
-	Status           *string                 `form:"status" binding:"required"`
+	Title                 string                  `form:"title" binding:"required"`
+	Description           string                  `form:"description"`
+	Perks                 string                  `form:"perks"`
+	StartDate             time.Time               `form:"startDate" binding:"required"`
+	EndDate               *time.Time              `form:"endDate"`
+	StartTime             *string                 `form:"startTime"`
+	EndTime               *string                 `form:"endTime"`
+	Location              *string                 `form:"location"`
+	RegistrationURL       *string                 `form:"registrationUrl" binding:"required"`
+	IsOnline              *bool                   `form:"isOnline" binding:"required"`
+	IsPaid                *bool                   `form:"isPaid" binding:"required"`
+	Price                 *int                    `form:"price"`
+	PromotionalMedia      []*multipart.FileHeader `form:"promotionalMedia"`
+	Medias                []*multipart.FileHeader `form:"medias"`
+	Documents             []*multipart.FileHeader `form:"documents"`
+	VideoLinks            []string                `form:"videoLinks"`
+	PromotionalVideoLinks []string                `form:"promotionalVideoLinks"`
+	Audiences             []string                `form:"audiences" binding:"required"`
+	Status                *string                 `form:"status" binding:"required"`
 }
 
 type EventUpdateRequestDTO struct {
@@ -60,6 +61,7 @@ type EventUpdateRequestDTO struct {
 	Medias                     []*multipart.FileHeader `form:"medias"`
 	Documents                  []*multipart.FileHeader `form:"documents"`
 	VideoLinks                 []string                `form:"videoLinks"`
+	PromotionalVideoLinks      []string                `form:"promotionalVideoLinks"`
 	Audiences                  []string                `form:"audiences" binding:"required"`
 	Status                     *string                 `form:"status" binding:"required"`
 }

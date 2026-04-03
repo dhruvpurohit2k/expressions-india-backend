@@ -43,25 +43,33 @@ func SeedDBWithEvent(s *Server, filepath string) error {
 	for _, d := range eventSeeds {
 		eventID, _ := uuid.NewV7()
 		perksBlob, _ := json.Marshal(d.Perks)
-		var promotionalMedia []models.Media
-		for _, fileName := range d.Medias {
 
+		var promotionalMedia []models.Media
+		var thumbnail *models.Media
+		for i, fileName := range d.Medias {
 			location, id, err := s.s3.UploadLocal(path.Join("./data/events/media", fileName))
 			if err != nil {
 				return err
 			}
-			promotionalMedia = append(promotionalMedia, models.Media{
+			media := models.Media{
 				ID:       id,
 				URL:      location,
 				FileType: "image/png",
-			})
+			}
+			promotionalMedia = append(promotionalMedia, media)
+			if i == 0 {
+				m := media
+				thumbnail = &m
+			}
 		}
+
 		startDate, _ := time.Parse("2006-01-02", d.StartDate)
 		var endDate *time.Time
 		if d.EndDate != nil {
 			endDateParsed, _ := time.Parse("2006-01-02", *d.EndDate)
 			endDate = &endDateParsed
 		}
+
 		event := &models.Event{
 			ID:               eventID.String(),
 			Title:            d.Title,
@@ -77,6 +85,10 @@ func SeedDBWithEvent(s *Server, filepath string) error {
 			EndTime:          d.EndTime,
 			PromotionalMedia: promotionalMedia,
 			Audiences:        []models.Audience{allAudience},
+		}
+		if thumbnail != nil {
+			event.Thumbnail = thumbnail
+			event.ThumbnailID = &thumbnail.ID
 		}
 		s.db.Create(event)
 	}

@@ -2,6 +2,7 @@ package event
 
 import (
 	"fmt"
+	"math"
 	"net/http"
 
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/dto"
@@ -40,8 +41,6 @@ func (ctrl *Controller) Create(c *gin.Context) {
 	}
 	utils.OK(c, &newEvent)
 
-	// ctrl.service.CreateEvent(event, images, audiences)
-	// c.JSON(http.StatusOK, gin.H{"message": "Event created successfully"})
 }
 
 func (ctrl *Controller) GetEventList(c *gin.Context) {
@@ -96,44 +95,38 @@ func (ctrl *Controller) GetEventById(c *gin.Context) {
 	utils.OK(c, event)
 }
 
-// func (ctrl *Controller) getEventFromForm(c *gin.Context) (*models.Event, []*multipart.FileHeader, []string, error) {
-// 	title := c.PostForm("title")
-// 	description := c.PostForm("description")
-// 	location := c.PostForm("location")
-// 	isPaid := c.PostForm("isPaid") == "true"
+func (ctrl *Controller) GetUpcomingEvents(c *gin.Context) {
+	var filter utils.Filter
+	if err := c.ShouldBindQuery(&filter); err != nil {
+		utils.Fail(c, http.StatusBadRequest, "INVALID_QUERY_PARAMS", err.Error())
+		return
+	}
+	events, total, err := ctrl.service.GetUpcomingEvents(filter.Limit, filter.Offset)
+	if err != nil {
+		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Could not retrieve upcoming events: "+err.Error())
+		return
+	}
+	utils.PaginatedOK(c, events, utils.Meta{
+		Total:      total,
+		PerPage:    filter.Limit,
+		TotalPages: int(math.Ceil(float64(total) / float64(filter.Limit))),
+	})
+}
 
-// 	price, err := strconv.Atoi(c.PostForm("price"))
-// 	if err != nil {
-// 		return nil, nil, nil, err
-// 	}
-// 	startDate, err := time.Parse(time.RFC3339, c.PostForm("startDate"))
-// 	if err != nil {
-// 		utils.Fail(c, http.StatusBadRequest, "INVALID_DATE", "Date must be YYYY-MM-DD")
-// 		return nil, nil, nil, err
-// 	}
-// 	endDate, err := time.Parse(time.RFC3339, c.PostForm("endDate"))
-// 	if err != nil {
-// 		utils.Fail(c, http.StatusBadRequest, "INVALID_DATE", "Date must be YYYY-MM-DD")
-// 		return nil, nil, nil, err
-// 	}
-// 	form, _ := c.MultipartForm()
-// 	images := form.File["medias"]
-// 	perks := []byte(c.PostForm("perks"))
-// 	var audiences []string
-// 	audiencesRaw := c.PostForm("audiences")
-// 	json.Unmarshal([]byte(audiencesRaw), &audiences)
-// 	event := &models.Event{
-// 		Title:       title,
-// 		Description: description,
-// 		StartDate:   startDate,
-// 		EndDate:     &endDate,
-// 		Location:    &location,
-// 		IsPaid:      isPaid,
-// 		Price:       &price,
-// 		Perks:       datatypes.JSON(perks),
-// 		Audiences:   []models.Audience{},
-// 		Medias:      []models.Media{},
-// 	}
-
-// 	return event, images, audiences, nil
-// }
+func (ctrl *Controller) GetPastEvents(c *gin.Context) {
+	var filter utils.Filter
+	if err := c.ShouldBindQuery(&filter); err != nil {
+		utils.Fail(c, http.StatusBadRequest, "INVALID_QUERY_PARAMS", err.Error())
+		return
+	}
+	events, total, err := ctrl.service.GetPastEvents(filter.Limit, filter.Offset)
+	if err != nil {
+		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Could not retrieve past events: "+err.Error())
+		return
+	}
+	utils.PaginatedOK(c, events, utils.Meta{
+		Total:      total,
+		PerPage:    filter.Limit,
+		TotalPages: int(math.Ceil(float64(total) / float64(filter.Limit))),
+	})
+}

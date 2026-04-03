@@ -1,6 +1,7 @@
 package podcast
 
 import (
+	"math"
 	"net/http"
 
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/dto"
@@ -50,6 +51,24 @@ func (ctrl *Controller) Delete(c *gin.Context) {
 		return
 	}
 	utils.OK(c, nil)
+}
+
+func (ctrl *Controller) GetPodcastList(c *gin.Context) {
+	var filter utils.Filter
+	if err := c.ShouldBindQuery(&filter); err != nil {
+		utils.Fail(c, http.StatusBadRequest, "INVALID_QUERY_PARAMS", err.Error())
+		return
+	}
+	podcasts, total, err := ctrl.service.GetPodcastList(filter.Limit, filter.Offset)
+	if err != nil {
+		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Could not retrieve podcasts: "+err.Error())
+		return
+	}
+	utils.PaginatedOK(c, podcasts, utils.Meta{
+		Total:      total,
+		PerPage:    filter.Limit,
+		TotalPages: int(math.Ceil(float64(total) / float64(filter.Limit))),
+	})
 }
 
 func (ctrl *Controller) Create(c *gin.Context) {

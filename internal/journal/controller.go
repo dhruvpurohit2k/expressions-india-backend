@@ -1,6 +1,7 @@
 package journal
 
 import (
+	"math"
 	"net/http"
 
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/dto"
@@ -39,6 +40,24 @@ func (ctrl *Controller) GetList(c *gin.Context) {
 	}
 	utils.OK(c, journals)
 }
+func (ctrl *Controller) GetJournalList(c *gin.Context) {
+	var filter utils.Filter
+	if err := c.ShouldBindQuery(&filter); err != nil {
+		utils.Fail(c, http.StatusBadRequest, "INVALID_QUERY_PARAMS", err.Error())
+		return
+	}
+	journals, total, err := ctrl.JournalService.GetJournalList(filter.Limit, filter.Offset)
+	if err != nil {
+		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Could not retrieve journals: "+err.Error())
+		return
+	}
+	utils.PaginatedOK(c, journals, utils.Meta{
+		Total:      total,
+		PerPage:    filter.Limit,
+		TotalPages: int(math.Ceil(float64(total) / float64(filter.Limit))),
+	})
+}
+
 func (ctrl *Controller) GetById(c *gin.Context) {
 	id := c.Param("id")
 	journal, err := ctrl.JournalService.GetJournalById(id)

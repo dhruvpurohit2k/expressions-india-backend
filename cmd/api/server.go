@@ -128,5 +128,15 @@ func (s *Server) SetupRoutes() {
 
 		// groupAdmin.POST("/event")
 	}
+	groupApi := s.r.Group("/api")
+	{
+		groupApi.GET("/event/upcoming", s.eventController.GetUpcomingEvents)
+		groupApi.GET("/event/past", s.eventController.GetPastEvents)
+		groupApi.GET("/event/:id", s.eventController.GetEventById)
+		groupApi.GET("/podcast", s.podcastController.GetPodcastList)
+		groupApi.GET("/podcast/:id", s.podcastController.GetById)
+		groupApi.GET("/journal", s.journalController.GetJournalList)
+		groupApi.GET("/journal/:id", s.journalController.GetById)
+	}
 
 }

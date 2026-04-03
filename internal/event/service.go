@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"mime/multipart"
+	"time"
 
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/dto"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/models"
@@ -19,6 +20,69 @@ type Service struct {
 	s3 *storage.S3
 }
 
+func (s Service) GetUpcomingEvents(limit int, offset int) ([]dto.EventListItemDTO, int64, error) {
+	var events []models.Event
+	var total int64
+
+	base := s.db.Model(&models.Event{}).
+		Where("status = ?", "upcoming").
+		Where("start_date >= ?", time.Now())
+
+	if err := base.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	if err := base.Preload("Thumbnail").Limit(limit).Offset(offset).Find(&events).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var result []dto.EventListItemDTO
+	for _, event := range events {
+		item := dto.EventListItemDTO{
+			ID:        event.ID,
+			Title:     event.Title,
+			StartDate: event.StartDate,
+			EndDate:   event.EndDate,
+		}
+		if event.Thumbnail != nil {
+			item.ThumbnailURL = &event.Thumbnail.URL
+		}
+		result = append(result, item)
+	}
+	return result, total, nil
+}
+
+func (s Service) GetPastEvents(limit int, offset int) ([]dto.EventListItemDTO, int64, error) {
+	var events []models.Event
+	var total int64
+
+	base := s.db.Model(&models.Event{}).
+		Where("status = ?", "completed")
+
+	if err := base.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	if err := base.Preload("Thumbnail").Order("end_date DESC").Limit(limit).Offset(offset).Find(&events).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var result []dto.EventListItemDTO
+	for _, event := range events {
+		item := dto.EventListItemDTO{
+			ID:        event.ID,
+			Title:     event.Title,
+			StartDate: event.StartDate,
+			EndDate:   event.EndDate,
+		}
+		if event.Thumbnail != nil {
+			item.ThumbnailURL = &event.Thumbnail.URL
+		}
+		result = append(result, item)
+	}
+	return result, total, nil
+}
+
 func NewService(db *gorm.DB, s3 *storage.S3) *Service {
 
 	return &Service{
@@ -29,7 +93,8 @@ func NewService(db *gorm.DB, s3 *storage.S3) *Service {
 
 func (s *Service) GetAllEvents() ([]models.Event, error) {
 	var events []models.Event
-	err := s.db.Preload("Medias").
+	err := s.db.Preload("Thumbnail").
+		Preload("Medias").
 		Preload("Documents").
 		Preload("VideoLinks").
 		Preload("PromotionalMedia").
@@ -41,7 +106,9 @@ func (s *Service) GetAllEvents() ([]models.Event, error) {
 
 func (s *Service) GetEventById(id string) (*dto.EventDTO, error) {
 	var event models.Event
-	err := s.db.Where("id = ?", id).Preload("Medias").
+	err := s.db.Where("id = ?", id).
+		Preload("Thumbnail").
+		Preload("Medias").
 		Preload("Documents").
 		Preload("VideoLinks").
 		Preload("PromotionalVideoLinks").
@@ -88,6 +155,12 @@ func (s *Service) CreateEvent(data *dto.EventCreateRequestDTO) error {
 	}
 	newEvent.RegistrationURL = *data.RegistrationURL
 
+	if data.Thumbnail != nil {
+		if err := s.uploadThumbnail(&newEvent, data.Thumbnail); err != nil {
+			return err
+		}
+	}
+
 	if len(data.Audiences) > 0 {
 		audienceRows, err := s.getAudience(data.Audiences)
 		if err != nil {
@@ -126,27 +199,31 @@ func (s *Service) CreateEvent(data *dto.EventCreateRequestDTO) error {
 func (s *Service) GetEventList(eventFilter utils.Filter) ([]dto.EventListItemDTO, error) {
 	var events []models.Event
 
-	query := utils.ApplyEventListFilters(s.db.Model(&models.Event{}), eventFilter)
+	query := utils.ApplyEventListFilters(s.db.Model(&models.Event{}).Preload("Thumbnail"), eventFilter)
 
 	err := query.Find(&events).Error
 
 	var eventList []dto.EventListItemDTO
 
 	for _, event := range events {
-		eventList = append(eventList, dto.EventListItemDTO{
+		item := dto.EventListItemDTO{
 			ID:        event.ID,
 			Title:     event.Title,
 			IsOnline:  event.IsOnline,
 			IsPaid:    event.IsPaid,
 			StartDate: event.StartDate,
 			EndDate:   event.EndDate,
-		})
+		}
+		if event.Thumbnail != nil {
+			item.ThumbnailURL = &event.Thumbnail.URL
+		}
+		eventList = append(eventList, item)
 	}
 
 	return eventList, err
 }
 
-func (s Service) UpdateEvent(id string, newData *dto.EventUpdateRequestDTO) error {
+func (s *Service) UpdateEvent(id string, newData *dto.EventUpdateRequestDTO) error {
 	var event models.Event
 	if err := s.db.First(&event, "id = ?", id).Error; err != nil {
 		return err
@@ -182,6 +259,22 @@ func (s Service) UpdateEvent(id string, newData *dto.EventUpdateRequestDTO) erro
 	}
 	event.RegistrationURL = *newData.RegistrationURL
 
+	if newData.DeletedThumbnailId != nil && *newData.DeletedThumbnailId != "" {
+		if err := s.db.Delete(&models.Media{}, "id = ?", *newData.DeletedThumbnailId).Error; err != nil {
+			return err
+		}
+		if err := s.s3.Delete(*newData.DeletedThumbnailId); err != nil {
+			return err
+		}
+		event.ThumbnailID = nil
+		event.Thumbnail = nil
+	}
+	if newData.Thumbnail != nil {
+		if err := s.uploadThumbnail(&event, newData.Thumbnail); err != nil {
+			return err
+		}
+	}
+
 	if len(newData.Audiences) > 0 {
 		audienceRows, err := s.getAudience(newData.Audiences)
 		if err != nil {
@@ -214,6 +307,24 @@ func (s Service) UpdateEvent(id string, newData *dto.EventUpdateRequestDTO) erro
 			return err
 		}
 	}
+	if len(newData.VideoLinks) > 0 {
+		newLinks, err := s.getLink(event.ID, newData.VideoLinks)
+		if err != nil {
+			return err
+		}
+		if err := s.db.Model(&event).Association("VideoLinks").Append(newLinks); err != nil {
+			return err
+		}
+	}
+	if len(newData.PromotionalVideoLinks) > 0 {
+		newLinks, err := s.getLink(event.ID, newData.PromotionalVideoLinks)
+		if err != nil {
+			return err
+		}
+		if err := s.db.Model(&event).Association("PromotionalVideoLinks").Append(newLinks); err != nil {
+			return err
+		}
+	}
 
 	if err := s.db.Save(&event).Error; err != nil {
 		return err
@@ -240,11 +351,11 @@ func (s *Service) appendPromotionalMedia(event *models.Event, files []*multipart
 			log.Println(err)
 			continue
 		}
-		location, key, err := s.s3.UploadNetwork(f)
+		location, key, contentType, err := s.s3.UploadNetwork(f)
 		if err != nil {
 			return err
 		}
-		event.PromotionalMedia = append(event.PromotionalMedia, models.Media{ID: key, URL: location})
+		event.PromotionalMedia = append(event.PromotionalMedia, models.Media{ID: key, URL: location, FileType: contentType})
 		f.Close()
 	}
 
@@ -257,11 +368,11 @@ func (s *Service) appendDocument(event *models.Event, files []*multipart.FileHea
 			log.Println(err)
 			continue
 		}
-		location, key, err := s.s3.UploadNetwork(f)
+		location, key, contentType, err := s.s3.UploadNetwork(f)
 		if err != nil {
 			return err
 		}
-		event.Documents = append(event.Documents, models.Media{ID: key, URL: location})
+		event.Documents = append(event.Documents, models.Media{ID: key, URL: location, FileType: contentType})
 		f.Close()
 	}
 
@@ -274,20 +385,39 @@ func (s *Service) appendMedia(event *models.Event, files []*multipart.FileHeader
 			log.Println(err)
 			continue
 		}
-		location, key, err := s.s3.UploadNetwork(f)
+		location, key, contentType, err := s.s3.UploadNetwork(f)
 		if err != nil {
 			return err
 		}
-		event.Medias = append(event.Medias, models.Media{ID: key, URL: location})
+		event.Medias = append(event.Medias, models.Media{ID: key, URL: location, FileType: contentType})
 		f.Close()
 	}
 
 	return nil
 }
 
+func (s *Service) uploadThumbnail(event *models.Event, file *multipart.FileHeader) error {
+	f, err := file.Open()
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	location, key, contentType, err := s.s3.UploadNetwork(f)
+	if err != nil {
+		return err
+	}
+	media := models.Media{ID: key, URL: location, FileType: contentType}
+	if err := s.db.Create(&media).Error; err != nil {
+		return err
+	}
+	event.ThumbnailID = &media.ID
+	event.Thumbnail = &media
+	return nil
+}
+
 func (s *Service) DeleteEvent(id string) error {
 	var event models.Event
-	if err := s.db.Preload("PromotionalMedia").Preload("Medias").Preload("Documents").Preload("VideoLinks").Preload("Audiences").First(&event, "id = ?", id).Error; err != nil {
+	if err := s.db.Preload("Thumbnail").Preload("PromotionalMedia").Preload("Medias").Preload("Documents").Preload("VideoLinks").Preload("Audiences").First(&event, "id = ?", id).Error; err != nil {
 		return err
 	}
 
@@ -308,6 +438,20 @@ func (s *Service) DeleteEvent(id string) error {
 	}
 	if err := s.db.Model(&event).Association("Audiences").Clear(); err != nil {
 		return err
+	}
+
+	if event.Thumbnail != nil {
+		thumbnailID := event.Thumbnail.ID
+		event.ThumbnailID = nil
+		if err := s.db.Save(&event).Error; err != nil {
+			return err
+		}
+		if err := s.db.Delete(&models.Media{}, "id = ?", thumbnailID).Error; err != nil {
+			return err
+		}
+		if err := s.s3.Delete(thumbnailID); err != nil {
+			return err
+		}
 	}
 
 	for _, media := range allMedia {

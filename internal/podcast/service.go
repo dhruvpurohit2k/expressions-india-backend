@@ -19,6 +19,7 @@ func (s *Service) CreatePodcast(o *dto.PodcastCreateDTO) any {
 		Link:        o.Link,
 		Description: &o.Description,
 		Tags:        datatypes.JSON(o.Tags),
+		Transcript:  o.Transcript,
 	}
 	for _, audience := range o.Audiences {
 		var a models.Audience
@@ -53,6 +54,31 @@ func (s *Service) GetPodcasts() ([]dto.PodcastListItemDTO, error) {
 		podcastDTOs = append(podcastDTOs, data)
 	}
 	return podcastDTOs, nil
+}
+
+func (s *Service) GetPodcastList(limit int, offset int) ([]dto.PodcastListItemDTO, int64, error) {
+	var podcasts []models.Podcast
+	var total int64
+
+	base := s.db.Model(&models.Podcast{})
+
+	if err := base.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	if err := base.Order("created_at DESC").Limit(limit).Offset(offset).Find(&podcasts).Error; err != nil {
+		return nil, 0, err
+	}
+
+	result := make([]dto.PodcastListItemDTO, 0, len(podcasts))
+	for _, podcast := range podcasts {
+		result = append(result, dto.PodcastListItemDTO{
+			ID:        podcast.ID,
+			Title:     podcast.Title,
+			CreatedAt: podcast.CreatedAt,
+		})
+	}
+	return result, total, nil
 }
 
 func (s *Service) DeletePodcast(id string) error {

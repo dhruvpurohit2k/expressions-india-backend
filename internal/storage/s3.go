@@ -74,14 +74,14 @@ func (s *S3) UploadLocal(fileUrl string) (string, string, error) {
 	})
 	return result.Location, s3Key, nil
 }
-func (s *S3) UploadNetwork(file io.Reader) (string, string, error) {
+func (s *S3) UploadNetwork(file io.Reader) (string, string, string, error) {
 
 	uploader := manager.NewUploader(s.S3)
 
 	buffer := make([]byte, 512)
 	n, err := file.Read(buffer)
 	if err != nil && err != io.EOF {
-		return "", "", fmt.Errorf("failed to read file header: %w", err)
+		return "", "", "", fmt.Errorf("failed to read file header: %w", err)
 	}
 	contentType := http.DetectContentType(buffer[:n])
 
@@ -96,10 +96,10 @@ func (s *S3) UploadNetwork(file io.Reader) (string, string, error) {
 	})
 
 	if err != nil {
-		return "", "", fmt.Errorf("s3 upload failed: %w", err)
+		return "", "", "", fmt.Errorf("s3 upload failed: %w", err)
 	}
 
-	return result.Location, s3Key, nil
+	return result.Location, s3Key, contentType, nil
 }
 
 func (s *S3) DeleteFromS3(s3Key string) error {

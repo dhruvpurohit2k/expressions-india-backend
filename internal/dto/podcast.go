@@ -23,5 +23,6 @@ type PodcastCreateDTO struct {
 	Link        string   `form:"link" binding:"required"`
 	Description string   `form:"description"`
 	Tags        string   `form:"tags"`
+	Transcript  *string  `form:"transcript"`
 	Audiences   []string `form:"audiences"`
 }

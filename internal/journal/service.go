@@ -38,6 +38,35 @@ func (s *Service) Get() ([]dto.JournalListItemDTO, error) {
 	return journaldtos, nil
 }
 
+func (s *Service) GetJournalList(limit int, offset int) ([]dto.JournalListItemDTO, int64, error) {
+	var journals []models.Journal
+	var total int64
+
+	base := s.db.Model(&models.Journal{})
+
+	if err := base.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	if err := base.Order("year DESC, issue DESC").Limit(limit).Offset(offset).Find(&journals).Error; err != nil {
+		return nil, 0, err
+	}
+
+	result := make([]dto.JournalListItemDTO, 0, len(journals))
+	for _, journal := range journals {
+		result = append(result, dto.JournalListItemDTO{
+			ID:         journal.ID,
+			Title:      journal.Title,
+			Volume:     journal.Volume,
+			Issue:      journal.Issue,
+			StartMonth: journal.StartMonth,
+			EndMonth:   journal.EndMonth,
+			Year:       journal.Year,
+		})
+	}
+	return result, total, nil
+}
+
 func (s *Service) GetJournalById(id string) (models.Journal, error) {
 	journal := models.Journal{}
 	if err := s.db.Where("id = ?", id).Preload("Chapters").Preload("Chapters.Authors").Preload("Media").Preload("Chapters.Media").First(&journal).Error; err != nil {

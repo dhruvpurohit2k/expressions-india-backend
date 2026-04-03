@@ -8,12 +8,13 @@ import (
 )
 
 type EventListItemDTO struct {
-	ID        string     `json:"id"`
-	Title     string     `json:"title"`
-	IsOnline  bool       `json:"isOnline"`
-	IsPaid    bool       `json:"isPaid"`
-	StartDate time.Time  `json:"startDate"`
-	EndDate   *time.Time `json:"endDate"`
+	ID           string     `json:"id"`
+	Title        string     `json:"title"`
+	IsOnline     bool       `json:"isOnline"`
+	IsPaid       bool       `json:"isPaid"`
+	StartDate    time.Time  `json:"startDate"`
+	EndDate      *time.Time `json:"endDate"`
+	ThumbnailURL *string    `json:"thumbnailUrl"`
 }
 type EventDTO struct {
 	models.Event
@@ -32,6 +33,7 @@ type EventCreateRequestDTO struct {
 	IsOnline              *bool                   `form:"isOnline" binding:"required"`
 	IsPaid                *bool                   `form:"isPaid" binding:"required"`
 	Price                 *int                    `form:"price"`
+	Thumbnail             *multipart.FileHeader   `form:"thumbnail"`
 	PromotionalMedia      []*multipart.FileHeader `form:"promotionalMedia"`
 	Medias                []*multipart.FileHeader `form:"medias"`
 	Documents             []*multipart.FileHeader `form:"documents"`
@@ -57,6 +59,8 @@ type EventUpdateRequestDTO struct {
 	DeletedMediaIds            []string                `form:"deletedMediaIds"`
 	DeletedDocumentIds         []string                `form:"deletedDocumentIds"`
 	DeletedPromotionalMediaIds []string                `form:"deletedPromotionalMediaIds"`
+	DeletedThumbnailId         *string                 `form:"deletedThumbnailId"`
+	Thumbnail                  *multipart.FileHeader   `form:"thumbnail"`
 	PromotionalMedia           []*multipart.FileHeader `form:"promotionalMedia"`
 	Medias                     []*multipart.FileHeader `form:"medias"`
 	Documents                  []*multipart.FileHeader `form:"documents"`

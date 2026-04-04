@@ -104,6 +104,42 @@ func (s *Service) GetAllEvents() ([]models.Event, error) {
 	return events, err
 }
 
+func (s *Service) GetUpcomingEventsByAudience(audience string, limit int, offset int) ([]dto.EventListItemDTO, int64, error) {
+	var events []models.Event
+	var total int64
+
+	base := s.db.Model(&models.Event{}).
+		Where("status = ?", "upcoming").
+		Where(
+			"events.id IN (SELECT ea.event_id FROM event_audience ea JOIN audiences a ON a.id = ea.audience_id WHERE a.name = ? OR a.name = 'all') OR events.id NOT IN (SELECT DISTINCT ea.event_id FROM event_audience ea)",
+			audience,
+		)
+
+	if err := base.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	if err := base.Preload("Thumbnail").Limit(limit).Offset(offset).Find(&events).Error; err != nil {
+		return nil, 0, err
+	}
+
+	result := make([]dto.EventListItemDTO, 0, len(events))
+	for _, e := range events {
+		item := dto.EventListItemDTO{
+			ID:        e.ID,
+			Title:     e.Title,
+			IsOnline:  e.IsOnline,
+			IsPaid:    e.IsPaid,
+			StartDate: e.StartDate,
+			EndDate:   e.EndDate,
+		}
+		if e.Thumbnail != nil {
+			item.ThumbnailURL = &e.Thumbnail.URL
+		}
+		result = append(result, item)
+	}
+	return result, total, nil
+}
+
 func (s *Service) GetEventById(id string) (*dto.EventDTO, error) {
 	var event models.Event
 	err := s.db.Where("id = ?", id).

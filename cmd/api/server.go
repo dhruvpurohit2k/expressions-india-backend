@@ -5,6 +5,8 @@ import (
 	"log"
 	"os"
 
+	"github.com/dhruvpurohit2k/expressions-india-backend/internal/article"
+	"github.com/dhruvpurohit2k/expressions-india-backend/internal/audience"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/enquiry"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/event"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/journal"
@@ -27,6 +29,8 @@ type Server struct {
 	journalController   *journal.Controller
 	podcastController   *podcast.Controller
 	enquiryController   *enquiry.Controller
+	articleController   *article.Controller
+	audienceController  *audience.Controller
 }
 
 func initServer() *Server {
@@ -46,6 +50,7 @@ func initServer() *Server {
 			&models.Author{},
 			&models.Podcast{},
 			&models.Enquiry{},
+			&models.Article{},
 		)
 	}
 	err := db.AutoMigrate(
@@ -59,6 +64,7 @@ func initServer() *Server {
 		&models.Author{},
 		&models.Podcast{},
 		&models.Enquiry{},
+		&models.Article{},
 	)
 	if err != nil {
 		log.Fatal(err.Error())
@@ -82,6 +88,12 @@ func initServer() *Server {
 	enquiryService := enquiry.NewService(db)
 	enquiryController := enquiry.NewController(enquiryService)
 
+	articleService := article.NewService(db, s3)
+	articleController := article.NewController(articleService)
+
+	audienceService := audience.NewService(db)
+	audienceController := audience.NewController(audienceService)
+
 	r := gin.Default()
 	r.Use(cors.Default())
 	return &Server{
@@ -93,6 +105,8 @@ func initServer() *Server {
 		journalController:   journalsController,
 		podcastController:   podcastController,
 		enquiryController:   enquiryController,
+		articleController:   articleController,
+		audienceController:  audienceController,
 	}
 }
 
@@ -126,7 +140,16 @@ func (s *Server) SetupRoutes() {
 		groupAdmin.GET("/enquiry/:id", s.enquiryController.GetById)
 		groupAdmin.DELETE("/enquiry/:id", s.enquiryController.Delete)
 
-		// groupAdmin.POST("/event")
+		groupAdmin.GET("/audience", s.audienceController.GetAudience)
+		// groupAdmin.GET("/audience/:id", s.audienceController.GetById)
+		// groupAdmin.POST("/audience", s.audienceController.Create)
+		// groupAdmin.DELETE("/audience/:id", s.audienceController.Delete)
+
+		groupAdmin.GET("/article", s.articleController.GetArticleList)
+		groupAdmin.GET("/article/:id", s.articleController.GetArticleById)
+		groupAdmin.POST("/article", s.articleController.Create)
+		groupAdmin.PUT("/article/:id", s.articleController.Update)
+		groupAdmin.DELETE("/article/:id", s.articleController.Delete)
 	}
 	groupApi := s.r.Group("/api")
 	{
@@ -137,6 +160,13 @@ func (s *Server) SetupRoutes() {
 		groupApi.GET("/podcast/:id", s.podcastController.GetById)
 		groupApi.GET("/journal", s.journalController.GetJournalList)
 		groupApi.GET("/journal/:id", s.journalController.GetById)
+		groupApi.POST("/enquiry", s.enquiryController.CreateEnquiry)
+		groupApi.GET("/article", s.articleController.GetArticleListPaginated)
+		groupApi.GET("/article/audience/:audience", s.articleController.GetArticlesByAudience)
+		groupApi.GET("/article/:id", s.articleController.GetArticleById)
+		groupApi.GET("/podcast/audience/:audience", s.podcastController.GetPodcastsByAudience)
+		groupApi.GET("/event/audience/:audience", s.eventController.GetUpcomingEventsByAudience)
+		groupApi.GET("/audience/:name", s.audienceController.GetAudienceByName)
 	}
 
 }

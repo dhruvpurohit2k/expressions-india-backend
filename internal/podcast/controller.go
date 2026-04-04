@@ -71,6 +71,25 @@ func (ctrl *Controller) GetPodcastList(c *gin.Context) {
 	})
 }
 
+func (ctrl *Controller) GetPodcastsByAudience(c *gin.Context) {
+	audience := c.Param("audience")
+	var filter utils.Filter
+	if err := c.ShouldBindQuery(&filter); err != nil {
+		utils.Fail(c, http.StatusBadRequest, "INVALID_QUERY_PARAMS", err.Error())
+		return
+	}
+	podcasts, total, err := ctrl.service.GetPodcastsByAudience(audience, filter.Limit, filter.Offset)
+	if err != nil {
+		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Could not retrieve podcasts: "+err.Error())
+		return
+	}
+	utils.PaginatedOK(c, podcasts, utils.Meta{
+		Total:      total,
+		PerPage:    filter.Limit,
+		TotalPages: int(math.Ceil(float64(total) / float64(filter.Limit))),
+	})
+}
+
 func (ctrl *Controller) Create(c *gin.Context) {
 	var dto dto.PodcastCreateDTO
 	if err := c.ShouldBind(&dto); err != nil {

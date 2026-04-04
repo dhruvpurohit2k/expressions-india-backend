@@ -92,6 +92,34 @@ func (s *Service) DeletePodcast(id string) error {
 	return s.db.Delete(&podcast).Error
 }
 
+func (s *Service) GetPodcastsByAudience(audience string, limit int, offset int) ([]dto.PodcastListItemDTO, int64, error) {
+	var podcasts []models.Podcast
+	var total int64
+
+	base := s.db.Model(&models.Podcast{}).
+		Where(
+			"podcasts.id IN (SELECT pa.podcast_id FROM podcast_audience pa JOIN audiences a ON a.id = pa.audience_id WHERE a.name = ? OR a.name = 'all') OR podcasts.id NOT IN (SELECT DISTINCT pa.podcast_id FROM podcast_audience pa)",
+			audience,
+		)
+
+	if err := base.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	if err := base.Order("podcasts.created_at DESC").Limit(limit).Offset(offset).Find(&podcasts).Error; err != nil {
+		return nil, 0, err
+	}
+
+	result := make([]dto.PodcastListItemDTO, 0, len(podcasts))
+	for _, p := range podcasts {
+		result = append(result, dto.PodcastListItemDTO{
+			ID:        p.ID,
+			Title:     p.Title,
+			CreatedAt: p.CreatedAt,
+		})
+	}
+	return result, total, nil
+}
+
 func (s *Service) GetPodcastById(id string) (*dto.PodcastDTO, error) {
 	var podcast models.Podcast
 	if err := s.db.Where("id = ?", id).Preload("Audiences").First(&podcast).Error; err != nil {

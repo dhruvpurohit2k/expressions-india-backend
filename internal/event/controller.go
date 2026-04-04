@@ -95,6 +95,25 @@ func (ctrl *Controller) GetEventById(c *gin.Context) {
 	utils.OK(c, event)
 }
 
+func (ctrl *Controller) GetUpcomingEventsByAudience(c *gin.Context) {
+	audience := c.Param("audience")
+	var filter utils.Filter
+	if err := c.ShouldBindQuery(&filter); err != nil {
+		utils.Fail(c, http.StatusBadRequest, "INVALID_QUERY_PARAMS", err.Error())
+		return
+	}
+	events, total, err := ctrl.service.GetUpcomingEventsByAudience(audience, filter.Limit, filter.Offset)
+	if err != nil {
+		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Could not retrieve events: "+err.Error())
+		return
+	}
+	utils.PaginatedOK(c, events, utils.Meta{
+		Total:      total,
+		PerPage:    filter.Limit,
+		TotalPages: int(math.Ceil(float64(total) / float64(filter.Limit))),
+	})
+}
+
 func (ctrl *Controller) GetUpcomingEvents(c *gin.Context) {
 	var filter utils.Filter
 	if err := c.ShouldBindQuery(&filter); err != nil {

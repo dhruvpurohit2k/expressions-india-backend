@@ -1,7 +1,6 @@
 package event
 
 import (
-	"fmt"
 	"math"
 	"net/http"
 
@@ -49,17 +48,16 @@ func (ctrl *Controller) GetEventList(c *gin.Context) {
 		utils.Fail(c, http.StatusBadRequest, "INVALID_DATA", err.Error())
 		return
 	}
-	events, err := ctrl.service.GetEventList(filter)
+	events, total, err := ctrl.service.GetEventList(filter)
 	if err != nil {
-		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Could not retrive events: "+err.Error())
+		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Could not retrieve events: "+err.Error())
 		return
 	}
-	fmt.Println(events)
-	if len(events) == 0 {
-		utils.OK(c, &[]dto.EventListItemDTO{})
-		return
-	}
-	utils.OK(c, events)
+	utils.PaginatedOK(c, events, utils.Meta{
+		Total:      total,
+		PerPage:    filter.Limit,
+		TotalPages: int(math.Ceil(float64(total) / float64(filter.Limit))),
+	})
 }
 
 func (ctrl *Controller) Update(c *gin.Context) {

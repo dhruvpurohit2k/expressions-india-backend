@@ -10,6 +10,7 @@ import (
 type EventListItemDTO struct {
 	ID           string     `json:"id"`
 	Title        string     `json:"title"`
+	Status       string     `json:"status"`
 	IsOnline     bool       `json:"isOnline"`
 	IsPaid       bool       `json:"isPaid"`
 	StartDate    time.Time  `json:"startDate"`

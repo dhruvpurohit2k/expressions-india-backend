@@ -54,12 +54,12 @@ func (ctrl *Controller) Delete(c *gin.Context) {
 }
 
 func (ctrl *Controller) GetPodcastList(c *gin.Context) {
-	var filter utils.Filter
+	var filter utils.PodcastFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
 		utils.Fail(c, http.StatusBadRequest, "INVALID_QUERY_PARAMS", err.Error())
 		return
 	}
-	podcasts, total, err := ctrl.service.GetPodcastList(filter.Limit, filter.Offset)
+	podcasts, total, err := ctrl.service.GetPodcastList(filter)
 	if err != nil {
 		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Could not retrieve podcasts: "+err.Error())
 		return

@@ -232,19 +232,31 @@ func (s *Service) CreateEvent(data *dto.EventCreateRequestDTO) error {
 	return nil
 }
 
-func (s *Service) GetEventList(eventFilter utils.Filter) ([]dto.EventListItemDTO, error) {
+func (s *Service) GetEventList(eventFilter utils.Filter) ([]dto.EventListItemDTO, int64, error) {
 	var events []models.Event
+	var total int64
+
+	base := utils.ApplyEventListFilters(s.db.Model(&models.Event{}), eventFilter)
+
+	if err := base.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
 
 	query := utils.ApplyEventListFilters(s.db.Model(&models.Event{}).Preload("Thumbnail"), eventFilter)
-
-	err := query.Find(&events).Error
+	if err := query.Find(&events).Error; err != nil {
+		return nil, 0, err
+	}
 
 	var eventList []dto.EventListItemDTO
-
 	for _, event := range events {
+		status := ""
+		if event.Status != nil {
+			status = *event.Status
+		}
 		item := dto.EventListItemDTO{
 			ID:        event.ID,
 			Title:     event.Title,
+			Status:    status,
 			IsOnline:  event.IsOnline,
 			IsPaid:    event.IsPaid,
 			StartDate: event.StartDate,
@@ -256,7 +268,7 @@ func (s *Service) GetEventList(eventFilter utils.Filter) ([]dto.EventListItemDTO
 		eventList = append(eventList, item)
 	}
 
-	return eventList, err
+	return eventList, total, nil
 }
 
 func (s *Service) UpdateEvent(id string, newData *dto.EventUpdateRequestDTO) error {

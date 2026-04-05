@@ -18,16 +18,21 @@ func NewController(service *Service) *Controller {
 }
 
 func (ctrl *Controller) GetArticleList(c *gin.Context) {
-	articles, err := ctrl.service.GetArticleList()
+	var filter utils.ArticleFilter
+	if err := c.ShouldBindQuery(&filter); err != nil {
+		utils.Fail(c, http.StatusBadRequest, "INVALID_QUERY_PARAMS", err.Error())
+		return
+	}
+	articles, total, err := ctrl.service.GetArticleList(filter)
 	if err != nil {
-		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Failed to fetch articles")
+		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Failed to fetch articles: "+err.Error())
 		return
 	}
-	if len(articles) == 0 {
-		utils.OK(c, &[]dto.ArticleListItemDTO{})
-		return
-	}
-	utils.OK(c, articles)
+	utils.PaginatedOK(c, articles, utils.Meta{
+		Total:      total,
+		PerPage:    filter.Limit,
+		TotalPages: int(math.Ceil(float64(total) / float64(filter.Limit))),
+	})
 }
 
 func (ctrl *Controller) GetArticleListPaginated(c *gin.Context) {

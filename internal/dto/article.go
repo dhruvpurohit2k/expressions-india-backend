@@ -12,8 +12,7 @@ type ArticleListItemDTO struct {
 	Title        string    `json:"title"`
 	Category     string    `json:"category"`
 	ThumbnailURL *string   `json:"thumbnailUrl"`
-	CreatedAt    time.Time `json:"createdAt"`
-	UpdatedAt    time.Time `json:"updatedAt"`
+	PublishedAt  time.Time `json:"publishedAt"`
 }
 
 type ArticleDTO struct {

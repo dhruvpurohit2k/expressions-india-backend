@@ -6,6 +6,7 @@ import (
 
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/dto"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/models"
+	"github.com/dhruvpurohit2k/expressions-india-backend/internal/pkg/utils"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/storage"
 	"gorm.io/gorm"
 )
@@ -19,26 +20,45 @@ func NewService(db *gorm.DB, s3 *storage.S3) *Service {
 	return &Service{db: db, s3: s3}
 }
 
-func (s *Service) GetArticleList() ([]dto.ArticleListItemDTO, error) {
+func (s *Service) GetArticleList(filter utils.ArticleFilter) ([]dto.ArticleListItemDTO, int64, error) {
 	var articles []models.Article
-	if err := s.db.Preload("Medias").Find(&articles).Error; err != nil {
-		return nil, err
+	var total int64
+
+	base := s.db.Model(&models.Article{})
+	if filter.Search != "" {
+		base = base.Where("title LIKE ?", "%"+filter.Search+"%")
 	}
+	if filter.Category != "" {
+		base = base.Where("category LIKE ?", "%"+filter.Category+"%")
+	}
+
+	if err := base.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	order := "created_at DESC"
+	if filter.SortOrder == "asc" {
+		order = "created_at ASC"
+	}
+
+	if err := base.Order(order).Limit(filter.Limit).Offset(filter.Offset).Preload("Medias").Find(&articles).Error; err != nil {
+		return nil, 0, err
+	}
+
 	result := make([]dto.ArticleListItemDTO, 0, len(articles))
 	for _, article := range articles {
 		item := dto.ArticleListItemDTO{
-			ID:        article.ID,
-			Title:     article.Title,
-			Category:  article.Category,
-			CreatedAt: article.CreatedAt,
-			UpdatedAt: article.UpdatedAt,
+			ID:          article.ID,
+			Title:       article.Title,
+			Category:    article.Category,
+			PublishedAt: article.CreatedAt,
 		}
 		if len(article.Medias) > 0 {
 			item.ThumbnailURL = &article.Medias[0].URL
 		}
 		result = append(result, item)
 	}
-	return result, nil
+	return result, total, nil
 }
 
 func (s *Service) GetArticleListPaginated(limit int, offset int) ([]dto.ArticleListItemDTO, int64, error) {
@@ -56,11 +76,10 @@ func (s *Service) GetArticleListPaginated(limit int, offset int) ([]dto.ArticleL
 	result := make([]dto.ArticleListItemDTO, 0, len(articles))
 	for _, article := range articles {
 		item := dto.ArticleListItemDTO{
-			ID:        article.ID,
-			Title:     article.Title,
-			Category:  article.Category,
-			CreatedAt: article.CreatedAt,
-			UpdatedAt: article.UpdatedAt,
+			ID:          article.ID,
+			Title:       article.Title,
+			Category:    article.Category,
+			PublishedAt: article.CreatedAt,
 		}
 		if len(article.Medias) > 0 {
 			item.ThumbnailURL = &article.Medias[0].URL
@@ -90,11 +109,10 @@ func (s *Service) GetArticlesByAudience(audience string, limit int, offset int) 
 	result := make([]dto.ArticleListItemDTO, 0, len(articles))
 	for _, a := range articles {
 		item := dto.ArticleListItemDTO{
-			ID:        a.ID,
-			Title:     a.Title,
-			Category:  a.Category,
-			CreatedAt: a.CreatedAt,
-			UpdatedAt: a.UpdatedAt,
+			ID:          a.ID,
+			Title:       a.Title,
+			Category:    a.Category,
+			PublishedAt: a.CreatedAt,
 		}
 		if len(a.Medias) > 0 {
 			item.ThumbnailURL = &a.Medias[0].URL

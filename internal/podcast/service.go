@@ -3,6 +3,7 @@ package podcast
 import (
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/dto"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/models"
+	"github.com/dhruvpurohit2k/expressions-india-backend/internal/pkg/utils"
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
@@ -56,17 +57,25 @@ func (s *Service) GetPodcasts() ([]dto.PodcastListItemDTO, error) {
 	return podcastDTOs, nil
 }
 
-func (s *Service) GetPodcastList(limit int, offset int) ([]dto.PodcastListItemDTO, int64, error) {
+func (s *Service) GetPodcastList(filter utils.PodcastFilter) ([]dto.PodcastListItemDTO, int64, error) {
 	var podcasts []models.Podcast
 	var total int64
 
 	base := s.db.Model(&models.Podcast{})
+	if filter.Search != "" {
+		base = base.Where("title LIKE ?", "%"+filter.Search+"%")
+	}
 
 	if err := base.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	if err := base.Order("created_at DESC").Limit(limit).Offset(offset).Find(&podcasts).Error; err != nil {
+	order := "created_at DESC"
+	if filter.SortOrder == "asc" {
+		order = "created_at ASC"
+	}
+
+	if err := base.Order(order).Limit(filter.Limit).Offset(filter.Offset).Find(&podcasts).Error; err != nil {
 		return nil, 0, err
 	}
 

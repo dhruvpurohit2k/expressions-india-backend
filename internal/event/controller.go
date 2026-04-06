@@ -130,6 +130,18 @@ func (ctrl *Controller) GetUpcomingEvents(c *gin.Context) {
 	})
 }
 
+func (ctrl *Controller) GetHomePageImages(c *gin.Context) {
+	urls, err := ctrl.service.GetHomePageImages()
+	if err != nil {
+		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Could not retrieve home page images: "+err.Error())
+		return
+	}
+	if urls == nil {
+		urls = []string{}
+	}
+	utils.OK(c, urls)
+}
+
 func (ctrl *Controller) GetPastEvents(c *gin.Context) {
 	var filter utils.Filter
 	if err := c.ShouldBindQuery(&filter); err != nil {

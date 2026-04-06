@@ -153,6 +153,7 @@ func (s *Server) SetupRoutes() {
 	}
 	groupApi := s.r.Group("/api")
 	{
+		groupApi.GET("/home/images", s.eventController.GetHomePageImages)
 		groupApi.GET("/event/upcoming", s.eventController.GetUpcomingEvents)
 		groupApi.GET("/event/past", s.eventController.GetPastEvents)
 		groupApi.GET("/event/:id", s.eventController.GetEventById)

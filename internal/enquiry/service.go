@@ -23,10 +23,12 @@ func (s *Service) GetEnquiryList() ([]dto.EnquiryListItemDTO, error) {
 	var result []dto.EnquiryListItemDTO
 	for _, enquiry := range enquiries {
 		result = append(result, dto.EnquiryListItemDTO{
-			Subject: enquiry.Subject,
-			Name:    enquiry.Name,
-			Email:   enquiry.Email,
-			Phone:   enquiry.Phone,
+			ID:        enquiry.ID,
+			Subject:   enquiry.Subject,
+			Name:      enquiry.Name,
+			Email:     enquiry.Email,
+			Phone:     enquiry.Phone,
+			CreatedAt: enquiry.CreatedAt,
 		})
 	}
 	return result, nil

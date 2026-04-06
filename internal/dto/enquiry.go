@@ -1,12 +1,14 @@
 package dto
 
+import "time"
+
 type EnquiryListItemDTO struct {
-	Id        string `json:"id"`
-	Subject   string `json:"subject"`
-	Name      string `json:"name"`
-	Email     string `json:"email"`
-	Phone     string `json:"phone"`
-	CreatedAt string `json:"created_at"`
+	ID        string    `json:"id"`
+	Subject   string    `json:"subject"`
+	Name      string    `json:"name"`
+	Email     string    `json:"email"`
+	Phone     string    `json:"phone"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 type EnquiryCreateDTO struct {

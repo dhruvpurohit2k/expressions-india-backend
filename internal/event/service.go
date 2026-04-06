@@ -520,6 +520,42 @@ func (s *Service) DeleteEvent(id string) error {
 	return s.db.Delete(&event).Error
 }
 
+func (s *Service) GetHomePageImages() ([]string, error) {
+	var upcomingEvents []models.Event
+	var pastEvents []models.Event
+
+	if err := s.db.Model(&models.Event{}).
+		Where("status = ?", "upcoming").
+		Preload("Thumbnail").
+		Order("start_date ASC").
+		Limit(3).
+		Find(&upcomingEvents).Error; err != nil {
+		return nil, err
+	}
+
+	if err := s.db.Model(&models.Event{}).
+		Where("status = ?", "completed").
+		Preload("Thumbnail").
+		Order("end_date DESC").
+		Limit(3).
+		Find(&pastEvents).Error; err != nil {
+		return nil, err
+	}
+
+	var urls []string
+	for _, e := range upcomingEvents {
+		if e.Thumbnail != nil && e.Thumbnail.URL != "" {
+			urls = append(urls, e.Thumbnail.URL)
+		}
+	}
+	for _, e := range pastEvents {
+		if e.Thumbnail != nil && e.Thumbnail.URL != "" {
+			urls = append(urls, e.Thumbnail.URL)
+		}
+	}
+	return urls, nil
+}
+
 func (s *Service) getLink(eventID string, links []string) ([]models.Link, error) {
 	var videoLinks []models.Link
 	for _, link := range links {

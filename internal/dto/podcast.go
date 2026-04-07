@@ -5,6 +5,7 @@ import "time"
 type PodcastListItemDTO struct {
 	ID        string    `json:"id"`
 	Title     string    `json:"title"`
+	Link      string    `json:"link"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 

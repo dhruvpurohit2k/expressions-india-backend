@@ -1,12 +1,14 @@
 package event
 
 import (
+	"errors"
 	"math"
 	"net/http"
 
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/dto"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/pkg/utils"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type Controller struct {
@@ -87,7 +89,11 @@ func (ctrl *Controller) GetEventById(c *gin.Context) {
 	id := c.Param("id")
 	event, err := ctrl.service.GetEventById(id)
 	if err != nil {
-		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Could not retrieve event: "+err.Error())
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			utils.Fail(c, http.StatusNotFound, "NOT_FOUND", "Event not found")
+		} else {
+			utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Could not retrieve event: "+err.Error())
+		}
 		return
 	}
 	utils.OK(c, event)

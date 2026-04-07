@@ -1,11 +1,13 @@
 package enquiry
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/dto"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/pkg/utils"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type Controller struct {
@@ -33,7 +35,11 @@ func (ctrl *Controller) GetById(c *gin.Context) {
 	id := c.Param("id")
 	enquiry, err := ctrl.service.GetEnquiryById(id)
 	if err != nil {
-		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Error fetching enquiry")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			utils.Fail(c, http.StatusNotFound, "NOT_FOUND", "Enquiry not found")
+		} else {
+			utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Error fetching enquiry")
+		}
 		return
 	}
 	utils.OK(c, enquiry)

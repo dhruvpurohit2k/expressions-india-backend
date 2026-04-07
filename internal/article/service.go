@@ -1,6 +1,8 @@
 package article
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"mime/multipart"
 
@@ -8,6 +10,7 @@ import (
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/models"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/pkg/utils"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/storage"
+	"golang.org/x/sync/errgroup"
 	"gorm.io/gorm"
 )
 
@@ -142,12 +145,13 @@ func (s *Service) GetArticleById(id string) (*dto.ArticleDTO, error) {
 	}, nil
 }
 
-func (s *Service) CreateArticle(data *dto.ArticleCreateRequestDTO) error {
+func (s *Service) CreateArticle(data *dto.ArticleCreateRequestDTO) (retErr error) {
 	article := models.Article{
 		Title:    data.Title,
 		Content:  data.Content,
 		Category: data.Category,
 	}
+
 	if len(data.Audiences) > 0 {
 		audiences, err := s.resolveAudiences(data.Audiences)
 		if err != nil {
@@ -155,6 +159,7 @@ func (s *Service) CreateArticle(data *dto.ArticleCreateRequestDTO) error {
 		}
 		article.Audience = audiences
 	}
+
 	if len(data.Medias) > 0 {
 		medias, err := s.uploadMediaFiles(data.Medias)
 		if err != nil {
@@ -162,7 +167,17 @@ func (s *Service) CreateArticle(data *dto.ArticleCreateRequestDTO) error {
 		}
 		article.Medias = medias
 	}
-	return s.db.Create(&article).Error
+
+	if err := s.db.Create(&article).Error; err != nil {
+		// Clean up uploaded S3 files since the DB record failed
+		for _, m := range article.Medias {
+			if delErr := s.s3.Delete(m.ID); delErr != nil {
+				log.Printf("S3 cleanup failed for key %s: %v", m.ID, delErr)
+			}
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *Service) UpdateArticle(id string, data *dto.ArticleUpdateRequestDTO) error {
@@ -206,6 +221,12 @@ func (s *Service) UpdateArticle(id string, data *dto.ArticleUpdateRequestDTO) er
 			return err
 		}
 		if err := s.db.Model(&article).Association("Medias").Append(medias); err != nil {
+			// Clean up uploaded S3 files since the DB association failed
+			for _, m := range medias {
+				if delErr := s.s3.Delete(m.ID); delErr != nil {
+					log.Printf("S3 cleanup failed for key %s: %v", m.ID, delErr)
+				}
+			}
 			return err
 		}
 	}
@@ -235,36 +256,45 @@ func (s *Service) DeleteArticle(id string) error {
 	return s.db.Delete(&article).Error
 }
 
+// resolveAudiences fetches audience records matching the given names in a single query.
 func (s *Service) resolveAudiences(names []string) ([]models.Audience, error) {
 	var audiences []models.Audience
-	for _, name := range names {
-		var audience models.Audience
-		if err := s.db.Where("name = ?", name).First(&audience).Error; err != nil {
-			return nil, err
-		}
-		audiences = append(audiences, audience)
+	if err := s.db.Where("name IN ?", names).Find(&audiences).Error; err != nil {
+		return nil, err
 	}
 	return audiences, nil
 }
 
+// uploadMediaFiles uploads all files to S3 concurrently.
+// If any upload fails, successfully uploaded files are cleaned up before returning the error.
 func (s *Service) uploadMediaFiles(files []*multipart.FileHeader) ([]models.Media, error) {
-	var medias []models.Media
-	for _, file := range files {
-		f, err := file.Open()
-		if err != nil {
-			log.Println(err)
-			continue
-		}
-		location, key, contentType, err := s.s3.UploadNetwork(f)
-		f.Close()
-		if err != nil {
-			return nil, err
-		}
-		medias = append(medias, models.Media{
-			ID:       key,
-			URL:      location,
-			FileType: contentType,
+	medias := make([]models.Media, len(files))
+	g, _ := errgroup.WithContext(context.Background())
+	for i, file := range files {
+		i, file := i, file
+		g.Go(func() error {
+			f, err := file.Open()
+			if err != nil {
+				return fmt.Errorf("failed to open %s: %w", file.Filename, err)
+			}
+			defer f.Close()
+			location, key, contentType, err := s.s3.UploadNetwork(f)
+			if err != nil {
+				return err
+			}
+			medias[i] = models.Media{ID: key, URL: location, FileType: contentType}
+			return nil
 		})
+	}
+	if err := g.Wait(); err != nil {
+		for _, m := range medias {
+			if m.ID != "" {
+				if delErr := s.s3.Delete(m.ID); delErr != nil {
+					log.Printf("S3 cleanup failed for key %s: %v", m.ID, delErr)
+				}
+			}
+		}
+		return nil, err
 	}
 	return medias, nil
 }

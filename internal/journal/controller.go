@@ -1,12 +1,14 @@
 package journal
 
 import (
+	"errors"
 	"math"
 	"net/http"
 
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/dto"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/pkg/utils"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type Controller struct {
@@ -62,7 +64,11 @@ func (ctrl *Controller) GetById(c *gin.Context) {
 	id := c.Param("id")
 	journal, err := ctrl.JournalService.GetJournalById(id)
 	if err != nil {
-		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Failed to fetch journal")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			utils.Fail(c, http.StatusNotFound, "NOT_FOUND", "Journal not found")
+		} else {
+			utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Failed to fetch journal")
+		}
 		return
 	}
 	utils.OK(c, journal)

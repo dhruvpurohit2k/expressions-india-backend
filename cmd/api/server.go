@@ -5,32 +5,38 @@ import (
 	"log"
 	"os"
 
+	"strings"
+	"time"
+
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/article"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/audience"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/enquiry"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/event"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/journal"
+	latestactivity "github.com/dhruvpurohit2k/expressions-india-backend/internal/latest-activity"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/models"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/pkg/utils"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/podcast"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/promotion"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/storage"
+
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
 type Server struct {
-	r                   *gin.Engine
-	db                  *gorm.DB
-	s3                  *storage.S3
-	eventController     *event.Controller
-	promotionController *promotion.Controller
-	journalController   *journal.Controller
-	podcastController   *podcast.Controller
-	enquiryController   *enquiry.Controller
-	articleController   *article.Controller
-	audienceController  *audience.Controller
+	r                        *gin.Engine
+	db                       *gorm.DB
+	s3                       *storage.S3
+	eventController          *event.Controller
+	promotionController      *promotion.Controller
+	journalController        *journal.Controller
+	podcastController        *podcast.Controller
+	enquiryController        *enquiry.Controller
+	articleController        *article.Controller
+	audienceController       *audience.Controller
+	latestActivityController *latestactivity.Controller
 }
 
 func initServer() *Server {
@@ -94,19 +100,32 @@ func initServer() *Server {
 	audienceService := audience.NewService(db)
 	audienceController := audience.NewController(audienceService)
 
+	latestActivityService := latestactivity.NewService(db)
+	latestActivityController := latestactivity.NewController(latestActivityService)
+
 	r := gin.Default()
-	r.Use(cors.Default())
+	if allowedOrigins := os.Getenv("ALLOWED_ORIGINS"); allowedOrigins != "" {
+		r.Use(cors.New(cors.Config{
+			AllowOrigins: strings.Split(allowedOrigins, ","),
+			AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+			AllowHeaders: []string{"Origin", "Content-Type"},
+			MaxAge:       12 * time.Hour,
+		}))
+	} else {
+		r.Use(cors.Default())
+	}
 	return &Server{
-		r:                   r,
-		db:                  db,
-		s3:                  s3,
-		eventController:     eventController,
-		promotionController: promotionController,
-		journalController:   journalsController,
-		podcastController:   podcastController,
-		enquiryController:   enquiryController,
-		articleController:   articleController,
-		audienceController:  audienceController,
+		r:                        r,
+		db:                       db,
+		s3:                       s3,
+		eventController:          eventController,
+		promotionController:      promotionController,
+		journalController:        journalsController,
+		podcastController:        podcastController,
+		enquiryController:        enquiryController,
+		articleController:        articleController,
+		audienceController:       audienceController,
+		latestActivityController: latestActivityController,
 	}
 }
 
@@ -141,6 +160,7 @@ func (s *Server) SetupRoutes() {
 		groupAdmin.DELETE("/enquiry/:id", s.enquiryController.Delete)
 
 		groupAdmin.GET("/audience", s.audienceController.GetAudience)
+		groupAdmin.PUT("/audience/:id", s.audienceController.UpdateDescription)
 		// groupAdmin.GET("/audience/:id", s.audienceController.GetById)
 		// groupAdmin.POST("/audience", s.audienceController.Create)
 		// groupAdmin.DELETE("/audience/:id", s.audienceController.Delete)
@@ -168,6 +188,7 @@ func (s *Server) SetupRoutes() {
 		groupApi.GET("/podcast/audience/:audience", s.podcastController.GetPodcastsByAudience)
 		groupApi.GET("/event/audience/:audience", s.eventController.GetUpcomingEventsByAudience)
 		groupApi.GET("/audience/:name", s.audienceController.GetAudienceByName)
+		groupApi.GET("/latest-activity", s.latestActivityController.GetLatestActivity)
 	}
 
 }

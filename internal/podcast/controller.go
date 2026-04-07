@@ -1,12 +1,14 @@
 package podcast
 
 import (
+	"errors"
 	"math"
 	"net/http"
 
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/dto"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/pkg/utils"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type Controller struct {
@@ -34,11 +36,11 @@ func (ctrl *Controller) GetById(c *gin.Context) {
 	id := c.Param("id")
 	podcast, err := ctrl.service.GetPodcastById(id)
 	if err != nil {
-		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Failed to fetch podcast")
-		return
-	}
-	if podcast == nil {
-		utils.Fail(c, http.StatusNotFound, "NOT_FOUND", "Podcast not found")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			utils.Fail(c, http.StatusNotFound, "NOT_FOUND", "Podcast not found")
+		} else {
+			utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Failed to fetch podcast")
+		}
 		return
 	}
 	utils.OK(c, podcast)
@@ -91,12 +93,12 @@ func (ctrl *Controller) GetPodcastsByAudience(c *gin.Context) {
 }
 
 func (ctrl *Controller) Create(c *gin.Context) {
-	var dto dto.PodcastCreateDTO
-	if err := c.ShouldBind(&dto); err != nil {
+	var req dto.PodcastCreateDTO
+	if err := c.ShouldBind(&req); err != nil {
 		utils.Fail(c, http.StatusBadRequest, "BAD_REQUEST", "Invalid input")
 		return
 	}
-	if err := ctrl.service.CreatePodcast(&dto); err != nil {
+	if err := ctrl.service.CreatePodcast(&req); err != nil {
 		utils.Fail(c, http.StatusInternalServerError, "CREATE_ERROR", "Failed to create podcast")
 		return
 	}

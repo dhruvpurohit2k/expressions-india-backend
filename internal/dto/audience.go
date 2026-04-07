@@ -7,3 +7,7 @@ type AudieceListItemDTO struct {
 	CreatedAt   string `json:"createdAt"`
 	UpdatedAt   string `json:"updatedAt"`
 }
+
+type AudienceUpdateDescriptionDTO struct {
+	Description string `json:"description" binding:"required"`
+}

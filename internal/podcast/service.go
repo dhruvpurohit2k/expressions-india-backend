@@ -13,7 +13,7 @@ type Service struct {
 	db *gorm.DB
 }
 
-func (s *Service) CreatePodcast(o *dto.PodcastCreateDTO) any {
+func (s *Service) CreatePodcast(o *dto.PodcastCreateDTO) error {
 	podcast := models.Podcast{
 		ID:          uuid.Must(uuid.NewV7()).String(),
 		Title:       o.Title,
@@ -22,17 +22,14 @@ func (s *Service) CreatePodcast(o *dto.PodcastCreateDTO) any {
 		Tags:        datatypes.JSON(o.Tags),
 		Transcript:  o.Transcript,
 	}
-	for _, audience := range o.Audiences {
-		var a models.Audience
-		if err := s.db.Where("name = ?", audience).First(&a).Error; err != nil {
+	if len(o.Audiences) > 0 {
+		var audiences []models.Audience
+		if err := s.db.Where("name IN ?", o.Audiences).Find(&audiences).Error; err != nil {
 			return err
 		}
-		podcast.Audiences = append(podcast.Audiences, a)
+		podcast.Audiences = audiences
 	}
-	if err := s.db.Create(&podcast).Error; err != nil {
-		return err
-	}
-	return nil
+	return s.db.Create(&podcast).Error
 }
 
 func NewService(db *gorm.DB) *Service {
@@ -50,6 +47,7 @@ func (s *Service) GetPodcasts() ([]dto.PodcastListItemDTO, error) {
 		data := dto.PodcastListItemDTO{
 			ID:        podcast.ID,
 			Title:     podcast.Title,
+			Link:      podcast.Link,
 			CreatedAt: podcast.CreatedAt,
 		}
 		podcastDTOs = append(podcastDTOs, data)
@@ -84,6 +82,7 @@ func (s *Service) GetPodcastList(filter utils.PodcastFilter) ([]dto.PodcastListI
 		result = append(result, dto.PodcastListItemDTO{
 			ID:        podcast.ID,
 			Title:     podcast.Title,
+			Link:      podcast.Link,
 			CreatedAt: podcast.CreatedAt,
 		})
 	}
@@ -123,6 +122,7 @@ func (s *Service) GetPodcastsByAudience(audience string, limit int, offset int) 
 		result = append(result, dto.PodcastListItemDTO{
 			ID:        p.ID,
 			Title:     p.Title,
+			Link:      p.Link,
 			CreatedAt: p.CreatedAt,
 		})
 	}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 
 	"github.com/joho/godotenv"
 )
@@ -19,5 +20,10 @@ func main() {
 	if err := SeedJournal(server, "./data/journal/journals.json"); err != nil {
 		log.Println("Failed to seed journal", err.Error(), ".\nSkipping")
 	}
-	server.r.Run(":8000")
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8000"
+	}
+	server.r.Run(":" + port)
 }

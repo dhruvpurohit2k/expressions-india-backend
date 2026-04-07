@@ -27,6 +27,14 @@ func (s *Service) GetAudienceByName(name string) (*dto.AudieceListItemDTO, error
 	}, nil
 }
 
+func (s *Service) UpdateAudienceDescription(id string, description string) error {
+	var audience models.Audience
+	if err := s.db.First(&audience, id).Error; err != nil {
+		return err
+	}
+	return s.db.Model(&audience).Update("description", description).Error
+}
+
 func (s *Service) GetAudience(ctx *gin.Context) ([]dto.AudieceListItemDTO, error) {
 	var audiences []models.Audience
 	if err := s.db.Where("Name NOT LIKE ?", "all").Find(&audiences).Error; err != nil {

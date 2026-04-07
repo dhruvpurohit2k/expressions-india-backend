@@ -1,6 +1,8 @@
 package models
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -17,6 +19,8 @@ type Journal struct {
 	MediaId     *string          `json:"-"`
 	Media       Media            `gorm:"foreignKey:MediaId" json:"media"`
 	Chapters    []JournalChapter `gorm:"foreignKey:JournalId" json:"chapters"`
+	CreatedAt   time.Time        `gorm:"not null" json:"createdAt"`
+	UpdatedAt   time.Time        `gorm:"not null" json:"updatedAt"`
 }
 
 type JournalChapter struct {

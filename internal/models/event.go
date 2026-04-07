@@ -37,10 +37,12 @@ type Event struct {
 }
 
 func (e *Event) BeforeCreate(tx *gorm.DB) error {
-	newID, err := uuid.NewV7()
-	if err != nil {
-		return err
+	if e.ID == "" {
+		newID, err := uuid.NewV7()
+		if err != nil {
+			return err
+		}
+		e.ID = newID.String()
 	}
-	e.ID = newID.String()
 	return nil
 }

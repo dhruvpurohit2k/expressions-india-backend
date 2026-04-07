@@ -17,10 +17,12 @@ type Media struct {
 }
 
 func (m *Media) BeforeCreate(tx *gorm.DB) error {
-	id, err := uuid.NewV7()
-	if err != nil {
-		return err
+	if m.ID == "" {
+		id, err := uuid.NewV7()
+		if err != nil {
+			return err
+		}
+		m.ID = id.String()
 	}
-	m.ID = id.String()
 	return nil
 }

@@ -148,6 +148,30 @@ func (ctrl *Controller) GetHomePageImages(c *gin.Context) {
 	utils.OK(c, urls)
 }
 
+func (ctrl *Controller) GetUpcomingCarouselImages(c *gin.Context) {
+	urls, err := ctrl.service.GetUpcomingCarouselImages()
+	if err != nil {
+		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Could not retrieve upcoming carousel images: "+err.Error())
+		return
+	}
+	if urls == nil {
+		urls = []string{}
+	}
+	utils.OK(c, urls)
+}
+
+func (ctrl *Controller) GetCompletedCarouselImages(c *gin.Context) {
+	urls, err := ctrl.service.GetCompletedCarouselImages()
+	if err != nil {
+		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Could not retrieve completed carousel images: "+err.Error())
+		return
+	}
+	if urls == nil {
+		urls = []string{}
+	}
+	utils.OK(c, urls)
+}
+
 func (ctrl *Controller) GetPastEvents(c *gin.Context) {
 	var filter utils.Filter
 	if err := c.ShouldBindQuery(&filter); err != nil {

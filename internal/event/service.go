@@ -619,6 +619,53 @@ func (s *Service) GetHomePageImages() ([]string, error) {
 	return urls, nil
 }
 
+func (s *Service) GetUpcomingCarouselImages() ([]string, error) {
+	var events []models.Event
+	if err := s.db.Model(&models.Event{}).
+		Where("status = ?", "upcoming").
+		Preload("Thumbnail").
+		Order("start_date ASC").
+		Limit(4).
+		Find(&events).Error; err != nil {
+		return nil, err
+	}
+
+	var urls []string
+	for _, e := range events {
+		if e.Thumbnail != nil && e.Thumbnail.URL != "" {
+			urls = append(urls, e.Thumbnail.URL)
+		}
+	}
+	return urls, nil
+}
+
+func (s *Service) GetCompletedCarouselImages() ([]string, error) {
+	var events []models.Event
+	if err := s.db.Model(&models.Event{}).
+		Where("status = ?", "completed").
+		Preload("PromotionalMedia").
+		Order("end_date DESC").
+		Limit(4).
+		Find(&events).Error; err != nil {
+		return nil, err
+	}
+
+	var urls []string
+	for _, e := range events {
+		count := 0
+		for _, m := range e.PromotionalMedia {
+			if count >= 3 {
+				break
+			}
+			if m.URL != "" {
+				urls = append(urls, m.URL)
+				count++
+			}
+		}
+	}
+	return urls, nil
+}
+
 func (s *Service) getLink(links []string) ([]models.Link, error) {
 	var videoLinks []models.Link
 	for _, link := range links {

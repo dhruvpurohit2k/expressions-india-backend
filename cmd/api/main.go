@@ -14,12 +14,12 @@ func main() {
 
 	server := initServer()
 	server.SetupRoutes()
-	if err := SeedDBWithEvent(server, "./data/events/events.json"); err != nil {
-		log.Println("Failed to seed data", err.Error(), ".\nSkipping")
-	}
-	if err := SeedJournal(server, "./data/journal/journals.json"); err != nil {
-		log.Println("Failed to seed journal", err.Error(), ".\nSkipping")
-	}
+	// if err := SeedDBWithEvent(server, "./data/events/events.json"); err != nil {
+	// 	log.Println("Failed to seed data", err.Error(), ".\nSkipping")
+	// }
+	// if err := SeedJournal(server, "./data/journal/journals.json"); err != nil {
+	// 	log.Println("Failed to seed journal", err.Error(), ".\nSkipping")
+	// }
 
 	port := os.Getenv("PORT")
 	if port == "" {

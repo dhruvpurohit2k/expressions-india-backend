@@ -6,8 +6,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/glebarez/sqlite"
 	"gorm.io/driver/postgres"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -27,12 +27,13 @@ func InitDB() *gorm.DB {
 		}
 
 		if env == "production" {
-			dns := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
+			dns := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable&search_path=public",
 				os.Getenv("DB_USERNAME"),
 				os.Getenv("DB_PASSWORD"),
 				os.Getenv("DB_HOST"),
 				os.Getenv("DB_PORT"),
 				os.Getenv("DB_NAME"))
+			log.Println(dns)
 			db, err = gorm.Open(postgres.Open(dns), &gorm.Config{
 				Logger: logger.Default.LogMode(logger.Error),
 			})

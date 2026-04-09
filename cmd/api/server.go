@@ -10,6 +10,7 @@ import (
 
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/article"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/audience"
+	"github.com/dhruvpurohit2k/expressions-india-backend/internal/course"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/enquiry"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/event"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/journal"
@@ -37,6 +38,7 @@ type Server struct {
 	articleController        *article.Controller
 	audienceController       *audience.Controller
 	latestActivityController *latestactivity.Controller
+	courseController         *course.Controller
 }
 
 func initServer() *Server {
@@ -57,6 +59,8 @@ func initServer() *Server {
 			&models.Podcast{},
 			&models.Enquiry{},
 			&models.Article{},
+			&models.Course{},
+			&models.CourseChapter{},
 		)
 	}
 	err := db.AutoMigrate(
@@ -71,6 +75,8 @@ func initServer() *Server {
 		&models.Podcast{},
 		&models.Enquiry{},
 		&models.Article{},
+		&models.Course{},
+		&models.CourseChapter{},
 	)
 	if err != nil {
 		log.Fatal(err.Error())
@@ -79,7 +85,7 @@ func initServer() *Server {
 	models.SeedAudience(db)
 	// models.SeedPromotions(db, s3)
 
-	eventService := *event.NewService(db, s3)
+	eventService := event.NewService(db, s3)
 	eventController := event.NewController(eventService)
 
 	promotionService := promotion.NewService(db)
@@ -102,6 +108,9 @@ func initServer() *Server {
 
 	latestActivityService := latestactivity.NewService(db)
 	latestActivityController := latestactivity.NewController(latestActivityService)
+
+	courseService := course.NewService(db, s3)
+	courseController := course.NewController(courseService)
 
 	r := gin.Default()
 	if allowedOrigins := os.Getenv("ALLOWED_ORIGINS"); allowedOrigins != "" {
@@ -126,6 +135,7 @@ func initServer() *Server {
 		articleController:        articleController,
 		audienceController:       audienceController,
 		latestActivityController: latestActivityController,
+		courseController:         courseController,
 	}
 }
 
@@ -170,6 +180,12 @@ func (s *Server) SetupRoutes() {
 		groupAdmin.POST("/article", s.articleController.Create)
 		groupAdmin.PUT("/article/:id", s.articleController.Update)
 		groupAdmin.DELETE("/article/:id", s.articleController.Delete)
+
+		groupAdmin.GET("/course", s.courseController.GetCoursesList)
+		groupAdmin.GET("/course/:id", s.courseController.GetCourseById)
+		groupAdmin.POST("/course", s.courseController.Create)
+		groupAdmin.PUT("/course/:id", s.courseController.Update)
+		groupAdmin.DELETE("/course/:id", s.courseController.Delete)
 	}
 	groupApi := s.r.Group("/api")
 	{

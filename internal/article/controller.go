@@ -2,7 +2,6 @@ package article
 
 import (
 	"errors"
-	"math"
 	"net/http"
 
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/dto"
@@ -27,13 +26,13 @@ func (ctrl *Controller) GetArticleList(c *gin.Context) {
 	}
 	articles, total, err := ctrl.service.GetArticleList(filter)
 	if err != nil {
-		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Failed to fetch articles: "+err.Error())
+		utils.FailInternal(c, "FETCH_ERROR", "Failed to fetch articles", err)
 		return
 	}
 	utils.PaginatedOK(c, articles, utils.Meta{
 		Total:      total,
 		PerPage:    filter.Limit,
-		TotalPages: int(math.Ceil(float64(total) / float64(filter.Limit))),
+		TotalPages: utils.SafeTotalPages(total, filter.Limit),
 	})
 }
 
@@ -45,13 +44,13 @@ func (ctrl *Controller) GetArticleListPaginated(c *gin.Context) {
 	}
 	articles, total, err := ctrl.service.GetArticleListPaginated(filter.Limit, filter.Offset)
 	if err != nil {
-		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Failed to fetch articles: "+err.Error())
+		utils.FailInternal(c, "FETCH_ERROR", "Failed to fetch articles", err)
 		return
 	}
 	utils.PaginatedOK(c, articles, utils.Meta{
 		Total:      total,
 		PerPage:    filter.Limit,
-		TotalPages: int(math.Ceil(float64(total) / float64(filter.Limit))),
+		TotalPages: utils.SafeTotalPages(total, filter.Limit),
 	})
 }
 
@@ -64,13 +63,13 @@ func (ctrl *Controller) GetArticlesByAudience(c *gin.Context) {
 	}
 	articles, total, err := ctrl.service.GetArticlesByAudience(audience, filter.Limit, filter.Offset)
 	if err != nil {
-		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Failed to fetch articles: "+err.Error())
+		utils.FailInternal(c, "FETCH_ERROR", "Failed to fetch articles", err)
 		return
 	}
 	utils.PaginatedOK(c, articles, utils.Meta{
 		Total:      total,
 		PerPage:    filter.Limit,
-		TotalPages: int(math.Ceil(float64(total) / float64(filter.Limit))),
+		TotalPages: utils.SafeTotalPages(total, filter.Limit),
 	})
 }
 
@@ -81,7 +80,7 @@ func (ctrl *Controller) GetArticleById(c *gin.Context) {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			utils.Fail(c, http.StatusNotFound, "NOT_FOUND", "Article not found")
 		} else {
-			utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Failed to fetch article: "+err.Error())
+			utils.FailInternal(c, "FETCH_ERROR", "Failed to fetch article", err)
 		}
 		return
 	}
@@ -95,7 +94,7 @@ func (ctrl *Controller) Create(c *gin.Context) {
 		return
 	}
 	if err := ctrl.service.CreateArticle(&req); err != nil {
-		utils.Fail(c, http.StatusInternalServerError, "CREATE_ERROR", "Failed to create article: "+err.Error())
+		utils.FailInternal(c, "CREATE_ERROR", "Failed to create article", err)
 		return
 	}
 	utils.OK(c, nil)
@@ -104,7 +103,7 @@ func (ctrl *Controller) Create(c *gin.Context) {
 func (ctrl *Controller) Delete(c *gin.Context) {
 	id := c.Param("id")
 	if err := ctrl.service.DeleteArticle(id); err != nil {
-		utils.Fail(c, http.StatusInternalServerError, "DELETE_ERROR", "Failed to delete article: "+err.Error())
+		utils.FailInternal(c, "DELETE_ERROR", "Failed to delete article", err)
 		return
 	}
 	utils.OK(c, nil)
@@ -118,7 +117,7 @@ func (ctrl *Controller) Update(c *gin.Context) {
 		return
 	}
 	if err := ctrl.service.UpdateArticle(id, &req); err != nil {
-		utils.Fail(c, http.StatusInternalServerError, "UPDATE_ERROR", "Failed to update article: "+err.Error())
+		utils.FailInternal(c, "UPDATE_ERROR", "Failed to update article", err)
 		return
 	}
 	utils.OK(c, nil)

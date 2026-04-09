@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"log"
+	"math"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -48,4 +50,19 @@ func Fail(c *gin.Context, status int, code, message string) {
 		Success: false,
 		Error:   &ErrorInfo{Code: code, Message: message},
 	})
+}
+
+// FailInternal logs the full error server-side and returns a generic message to the client.
+// Use this instead of Fail for 5xx errors to avoid leaking internal details.
+func FailInternal(c *gin.Context, code string, clientMsg string, err error) {
+	log.Printf("[%s] %s: %v", code, clientMsg, err)
+	Fail(c, http.StatusInternalServerError, code, clientMsg)
+}
+
+// SafeTotalPages calculates total pages without dividing by zero.
+func SafeTotalPages(total int64, limit int) int {
+	if limit <= 0 {
+		return 0
+	}
+	return int(math.Ceil(float64(total) / float64(limit)))
 }

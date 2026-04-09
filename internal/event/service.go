@@ -30,7 +30,7 @@ func NewService(db *gorm.DB, s3 *storage.S3) *Service {
 	}
 }
 
-func (s Service) GetUpcomingEvents(limit int, offset int) ([]dto.EventListItemDTO, int64, error) {
+func (s *Service) GetUpcomingEvents(limit int, offset int) ([]dto.EventListItemDTO, int64, error) {
 	var events []models.Event
 	var total int64
 
@@ -62,7 +62,7 @@ func (s Service) GetUpcomingEvents(limit int, offset int) ([]dto.EventListItemDT
 	return result, total, nil
 }
 
-func (s Service) GetPastEvents(limit int, offset int) ([]dto.EventListItemDTO, int64, error) {
+func (s *Service) GetPastEvents(limit int, offset int) ([]dto.EventListItemDTO, int64, error) {
 	var events []models.Event
 	var total int64
 
@@ -185,7 +185,9 @@ func (s *Service) CreateEvent(data *dto.EventCreateRequestDTO) (retErr error) {
 		newEvent.IsPaid = *data.IsPaid
 		newEvent.Price = data.Price
 	}
-	newEvent.RegistrationURL = *data.RegistrationURL
+	if data.RegistrationURL != nil {
+		newEvent.RegistrationURL = *data.RegistrationURL
+	}
 
 	// Track whether thumbnail was persisted to DB so we can clean it up on failure.
 	var thumbnailPersistedToDB bool
@@ -241,12 +243,13 @@ func (s *Service) GetEventList(eventFilter utils.Filter) ([]dto.EventListItemDTO
 	var events []models.Event
 	var total int64
 
-	base := utils.ApplyEventListFilters(s.db.Model(&models.Event{}), eventFilter)
-
-	if err := base.Count(&total).Error; err != nil {
+	// Count without LIMIT/OFFSET so total reflects the full filtered set.
+	countQuery := utils.ApplyEventListBaseFilters(s.db.Model(&models.Event{}), eventFilter)
+	if err := countQuery.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
+	// Data query applies pagination on top of the same filters.
 	query := utils.ApplyEventListFilters(s.db.Model(&models.Event{}).Preload("Thumbnail"), eventFilter)
 	if err := query.Find(&events).Error; err != nil {
 		return nil, 0, err
@@ -310,7 +313,9 @@ func (s *Service) UpdateEvent(id string, newData *dto.EventUpdateRequestDTO) (re
 		event.IsPaid = false
 		event.Price = nil
 	}
-	event.RegistrationURL = *newData.RegistrationURL
+	if newData.RegistrationURL != nil {
+		event.RegistrationURL = *newData.RegistrationURL
+	}
 
 	// Track newly created resources so we can clean them up if db.Save fails at the end.
 	var newThumbnailID string
@@ -368,9 +373,24 @@ func (s *Service) UpdateEvent(id string, newData *dto.EventUpdateRequestDTO) (re
 		if err := s.db.Delete(&models.Media{}, "id = ?", mediaID).Error; err != nil {
 			return err
 		}
-		// Best-effort: DB record is gone; log but don't fail if S3 delete fails.
+		if err := s.s3.Delete(mediaID); err != nil {
+			log.Printf("S3 cleanup failed for deleted promotional media %s: %v", mediaID, err)
+		}
+	}
+	for _, mediaID := range newData.DeletedMediaIds {
+		if err := s.db.Delete(&models.Media{}, "id = ?", mediaID).Error; err != nil {
+			return err
+		}
 		if err := s.s3.Delete(mediaID); err != nil {
 			log.Printf("S3 cleanup failed for deleted media %s: %v", mediaID, err)
+		}
+	}
+	for _, docID := range newData.DeletedDocumentIds {
+		if err := s.db.Delete(&models.Media{}, "id = ?", docID).Error; err != nil {
+			return err
+		}
+		if err := s.s3.Delete(docID); err != nil {
+			log.Printf("S3 cleanup failed for deleted document %s: %v", docID, err)
 		}
 	}
 

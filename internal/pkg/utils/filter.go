@@ -1,8 +1,6 @@
 package utils
 
 import (
-	"os"
-
 	"gorm.io/gorm"
 )
 
@@ -30,11 +28,7 @@ func BySearch(title string) func(db *gorm.DB) *gorm.DB {
 		if title == "" {
 			return db
 		}
-		if os.Getenv("APP_ENV") == "production" {
-			return db.Where("title ILIKE ?", "%"+title+"%")
-		} else {
-			return db.Where("title LIKE ?", "%"+title+"%")
-		}
+		return db.Where("LOWER(title) LIKE LOWER(?)", "%"+title+"%")
 	}
 }
 
@@ -78,6 +72,18 @@ func ByOffset(offset int) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		return db.Offset(offset)
 	}
+}
+
+// ApplyEventListBaseFilters applies only the WHERE/ORDER filters — no LIMIT/OFFSET.
+// Use this for COUNT queries so the total reflects the full filtered set.
+func ApplyEventListBaseFilters(query *gorm.DB, filter Filter) *gorm.DB {
+	return query.Scopes(
+		ByStatus(filter.Status),
+		BySearch(filter.Search),
+		ByOnline(filter.Online),
+		ByPaid(filter.Paid),
+		ByDateSort(filter.SortOrder),
+	)
 }
 
 func ApplyEventListFilters(query *gorm.DB, filter Filter) *gorm.DB {

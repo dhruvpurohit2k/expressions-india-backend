@@ -4,7 +4,6 @@ import (
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/dto"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/models"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/pkg/utils"
-	"github.com/google/uuid"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
@@ -15,7 +14,6 @@ type Service struct {
 
 func (s *Service) CreatePodcast(o *dto.PodcastCreateDTO) error {
 	podcast := models.Podcast{
-		ID:          uuid.Must(uuid.NewV7()).String(),
 		Title:       o.Title,
 		Link:        o.Link,
 		Description: &o.Description,
@@ -61,7 +59,7 @@ func (s *Service) GetPodcastList(filter utils.PodcastFilter) ([]dto.PodcastListI
 
 	base := s.db.Model(&models.Podcast{})
 	if filter.Search != "" {
-		base = base.Where("title LIKE ?", "%"+filter.Search+"%")
+		base = base.Where("LOWER(title) LIKE LOWER(?)", "%"+filter.Search+"%")
 	}
 
 	if err := base.Count(&total).Error; err != nil {

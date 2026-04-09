@@ -3,8 +3,17 @@ package models
 import (
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/datatypes"
+	"gorm.io/gorm"
 )
+
+func (p *Podcast) BeforeCreate(tx *gorm.DB) error {
+	if p.ID == "" {
+		p.ID = uuid.Must(uuid.NewV7()).String()
+	}
+	return nil
+}
 
 type Podcast struct {
 	ID          string         `gorm:"primaryKey;type:uuid" json:"id"`

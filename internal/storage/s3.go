@@ -72,6 +72,9 @@ func (s *S3) UploadLocal(fileUrl string) (string, string, error) {
 		ContentType:        aws.String(contentType),
 		ContentDisposition: aws.String("inline"),
 	})
+	if err != nil {
+		return "", "", err
+	}
 	return result.Location, s3Key, nil
 }
 func (s *S3) UploadNetwork(file io.Reader) (string, string, string, error) {

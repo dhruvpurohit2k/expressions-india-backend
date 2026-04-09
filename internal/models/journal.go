@@ -25,9 +25,10 @@ type Journal struct {
 
 type JournalChapter struct {
 	Id          string   `gorm:"primaryKey;type:uuid" json:"id"`
-	JournalId   string   `gorm:"not null" json:"-"`
+	JournalId   string   `gorm:"type:uuid;not null" json:"-"`
+	Journal     *Journal `gorm:"foreignKey:JournalId;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"-"`
 	Title       string   `gorm:"not null" json:"title"`
-	MediaId     *string  `json:"-"`
+	MediaId     *string  `gorm:"type:uuid" json:"-"`
 	Media       Media    `gorm:"foreignKey:MediaId" json:"media"`
 	Description *string  `json:"description"`
 	Authors     []Author `gorm:"many2many:journal_chapter_authors" json:"authors"`

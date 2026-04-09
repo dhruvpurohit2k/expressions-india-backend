@@ -33,7 +33,6 @@ func InitDB() *gorm.DB {
 				os.Getenv("DB_HOST"),
 				os.Getenv("DB_PORT"),
 				os.Getenv("DB_NAME"))
-			log.Println(dns)
 			db, err = gorm.Open(postgres.Open(dns), &gorm.Config{
 				Logger: logger.Default.LogMode(logger.Error),
 			})

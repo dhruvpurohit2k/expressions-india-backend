@@ -2,7 +2,6 @@ package podcast
 
 import (
 	"errors"
-	"math"
 	"net/http"
 
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/dto"
@@ -63,13 +62,13 @@ func (ctrl *Controller) GetPodcastList(c *gin.Context) {
 	}
 	podcasts, total, err := ctrl.service.GetPodcastList(filter)
 	if err != nil {
-		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Could not retrieve podcasts: "+err.Error())
+		utils.FailInternal(c, "FETCH_ERROR", "Could not retrieve podcasts", err)
 		return
 	}
 	utils.PaginatedOK(c, podcasts, utils.Meta{
 		Total:      total,
 		PerPage:    filter.Limit,
-		TotalPages: int(math.Ceil(float64(total) / float64(filter.Limit))),
+		TotalPages: utils.SafeTotalPages(total, filter.Limit),
 	})
 }
 
@@ -82,13 +81,13 @@ func (ctrl *Controller) GetPodcastsByAudience(c *gin.Context) {
 	}
 	podcasts, total, err := ctrl.service.GetPodcastsByAudience(audience, filter.Limit, filter.Offset)
 	if err != nil {
-		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Could not retrieve podcasts: "+err.Error())
+		utils.FailInternal(c, "FETCH_ERROR", "Could not retrieve podcasts", err)
 		return
 	}
 	utils.PaginatedOK(c, podcasts, utils.Meta{
 		Total:      total,
 		PerPage:    filter.Limit,
-		TotalPages: int(math.Ceil(float64(total) / float64(filter.Limit))),
+		TotalPages: utils.SafeTotalPages(total, filter.Limit),
 	})
 }
 

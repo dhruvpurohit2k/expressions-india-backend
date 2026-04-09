@@ -3,7 +3,6 @@ package enquiry
 import (
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/dto"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/models"
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -48,7 +47,6 @@ func (s *Service) DeleteEnquiry(id string) error {
 
 func (s *Service) CreateEnquiry(enquiry *dto.EnquiryCreateDTO) error {
 	return s.db.Create(&models.Enquiry{
-		ID:      uuid.Must(uuid.NewV7()).String(),
 		Subject: enquiry.Subject,
 		Name:    enquiry.Name,
 		Email:   enquiry.Email,

@@ -29,10 +29,10 @@ func (s *Service) GetArticleList(filter utils.ArticleFilter) ([]dto.ArticleListI
 
 	base := s.db.Model(&models.Article{})
 	if filter.Search != "" {
-		base = base.Where("title LIKE ?", "%"+filter.Search+"%")
+		base = base.Where("LOWER(title) LIKE LOWER(?)", "%"+filter.Search+"%")
 	}
 	if filter.Category != "" {
-		base = base.Where("category LIKE ?", "%"+filter.Category+"%")
+		base = base.Where("LOWER(category) LIKE LOWER(?)", "%"+filter.Category+"%")
 	}
 
 	if err := base.Count(&total).Error; err != nil {

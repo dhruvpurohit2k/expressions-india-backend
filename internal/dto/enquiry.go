@@ -12,9 +12,9 @@ type EnquiryListItemDTO struct {
 }
 
 type EnquiryCreateDTO struct {
-	Subject string `form:"subject" json:"subject"`
-	Name    string `form:"name" json:"name"`
-	Email   string `form:"email" json:"email"`
-	Phone   string `form:"phone" json:"phone"`
-	Message string `form:"message" json:"message"`
+	Subject string `form:"subject" json:"subject" binding:"required"`
+	Name    string `form:"name" json:"name" binding:"required"`
+	Email   string `form:"email" json:"email" binding:"required,email"`
+	Phone   string `form:"phone" json:"phone" binding:"required"`
+	Message string `form:"message" json:"message" binding:"required"`
 }

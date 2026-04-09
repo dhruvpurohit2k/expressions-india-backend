@@ -2,7 +2,6 @@ package event
 
 import (
 	"errors"
-	"math"
 	"net/http"
 
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/dto"
@@ -11,20 +10,19 @@ import (
 	"gorm.io/gorm"
 )
 
+// Controller holds a pointer to Service so pointer-receiver methods work correctly.
 type Controller struct {
-	service Service
+	service *Service
 }
 
-func NewController(s Service) *Controller {
-	return &Controller{
-		service: s,
-	}
+func NewController(s *Service) *Controller {
+	return &Controller{service: s}
 }
 
 func (ctrl *Controller) GetAll(c *gin.Context) {
 	events, err := ctrl.service.GetAllEvents()
 	if err != nil {
-		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Could not retrive events: "+err.Error())
+		utils.FailInternal(c, "FETCH_ERROR", "Could not retrieve events", err)
 		return
 	}
 	utils.OK(c, events)
@@ -37,11 +35,10 @@ func (ctrl *Controller) Create(c *gin.Context) {
 		return
 	}
 	if err := ctrl.service.CreateEvent(&newEvent); err != nil {
-		utils.Fail(c, http.StatusInternalServerError, "CREATE_ERROR", "Could not create event: "+err.Error())
+		utils.FailInternal(c, "CREATE_ERROR", "Could not create event", err)
 		return
 	}
-	utils.OK(c, &newEvent)
-
+	utils.OK(c, nil)
 }
 
 func (ctrl *Controller) GetEventList(c *gin.Context) {
@@ -52,13 +49,13 @@ func (ctrl *Controller) GetEventList(c *gin.Context) {
 	}
 	events, total, err := ctrl.service.GetEventList(filter)
 	if err != nil {
-		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Could not retrieve events: "+err.Error())
+		utils.FailInternal(c, "FETCH_ERROR", "Could not retrieve events", err)
 		return
 	}
 	utils.PaginatedOK(c, events, utils.Meta{
 		Total:      total,
 		PerPage:    filter.Limit,
-		TotalPages: int(math.Ceil(float64(total) / float64(filter.Limit))),
+		TotalPages: utils.SafeTotalPages(total, filter.Limit),
 	})
 }
 
@@ -70,16 +67,16 @@ func (ctrl *Controller) Update(c *gin.Context) {
 		return
 	}
 	if err := ctrl.service.UpdateEvent(id, &updateEvent); err != nil {
-		utils.Fail(c, http.StatusInternalServerError, "UPDATE_FAILED", err.Error())
+		utils.FailInternal(c, "UPDATE_FAILED", "Could not update event", err)
 		return
 	}
-	utils.OK(c, updateEvent)
-
+	utils.OK(c, nil)
 }
+
 func (ctrl *Controller) Delete(c *gin.Context) {
 	id := c.Param("id")
 	if err := ctrl.service.DeleteEvent(id); err != nil {
-		utils.Fail(c, http.StatusInternalServerError, "DELETE_ERROR", "Could not delete event: "+err.Error())
+		utils.FailInternal(c, "DELETE_ERROR", "Could not delete event", err)
 		return
 	}
 	utils.OK(c, nil)
@@ -92,7 +89,7 @@ func (ctrl *Controller) GetEventById(c *gin.Context) {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			utils.Fail(c, http.StatusNotFound, "NOT_FOUND", "Event not found")
 		} else {
-			utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Could not retrieve event: "+err.Error())
+			utils.FailInternal(c, "FETCH_ERROR", "Could not retrieve event", err)
 		}
 		return
 	}
@@ -108,13 +105,13 @@ func (ctrl *Controller) GetUpcomingEventsByAudience(c *gin.Context) {
 	}
 	events, total, err := ctrl.service.GetUpcomingEventsByAudience(audience, filter.Limit, filter.Offset)
 	if err != nil {
-		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Could not retrieve events: "+err.Error())
+		utils.FailInternal(c, "FETCH_ERROR", "Could not retrieve events", err)
 		return
 	}
 	utils.PaginatedOK(c, events, utils.Meta{
 		Total:      total,
 		PerPage:    filter.Limit,
-		TotalPages: int(math.Ceil(float64(total) / float64(filter.Limit))),
+		TotalPages: utils.SafeTotalPages(total, filter.Limit),
 	})
 }
 
@@ -126,20 +123,20 @@ func (ctrl *Controller) GetUpcomingEvents(c *gin.Context) {
 	}
 	events, total, err := ctrl.service.GetUpcomingEvents(filter.Limit, filter.Offset)
 	if err != nil {
-		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Could not retrieve upcoming events: "+err.Error())
+		utils.FailInternal(c, "FETCH_ERROR", "Could not retrieve upcoming events", err)
 		return
 	}
 	utils.PaginatedOK(c, events, utils.Meta{
 		Total:      total,
 		PerPage:    filter.Limit,
-		TotalPages: int(math.Ceil(float64(total) / float64(filter.Limit))),
+		TotalPages: utils.SafeTotalPages(total, filter.Limit),
 	})
 }
 
 func (ctrl *Controller) GetHomePageImages(c *gin.Context) {
 	urls, err := ctrl.service.GetHomePageImages()
 	if err != nil {
-		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Could not retrieve home page images: "+err.Error())
+		utils.FailInternal(c, "FETCH_ERROR", "Could not retrieve home page images", err)
 		return
 	}
 	if urls == nil {
@@ -151,7 +148,7 @@ func (ctrl *Controller) GetHomePageImages(c *gin.Context) {
 func (ctrl *Controller) GetUpcomingCarouselImages(c *gin.Context) {
 	urls, err := ctrl.service.GetUpcomingCarouselImages()
 	if err != nil {
-		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Could not retrieve upcoming carousel images: "+err.Error())
+		utils.FailInternal(c, "FETCH_ERROR", "Could not retrieve upcoming carousel images", err)
 		return
 	}
 	if urls == nil {
@@ -163,7 +160,7 @@ func (ctrl *Controller) GetUpcomingCarouselImages(c *gin.Context) {
 func (ctrl *Controller) GetCompletedCarouselImages(c *gin.Context) {
 	urls, err := ctrl.service.GetCompletedCarouselImages()
 	if err != nil {
-		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Could not retrieve completed carousel images: "+err.Error())
+		utils.FailInternal(c, "FETCH_ERROR", "Could not retrieve completed carousel images", err)
 		return
 	}
 	if urls == nil {
@@ -180,12 +177,12 @@ func (ctrl *Controller) GetPastEvents(c *gin.Context) {
 	}
 	events, total, err := ctrl.service.GetPastEvents(filter.Limit, filter.Offset)
 	if err != nil {
-		utils.Fail(c, http.StatusInternalServerError, "FETCH_ERROR", "Could not retrieve past events: "+err.Error())
+		utils.FailInternal(c, "FETCH_ERROR", "Could not retrieve past events", err)
 		return
 	}
 	utils.PaginatedOK(c, events, utils.Meta{
 		Total:      total,
 		PerPage:    filter.Limit,
-		TotalPages: int(math.Ceil(float64(total) / float64(filter.Limit))),
+		TotalPages: utils.SafeTotalPages(total, filter.Limit),
 	})
 }

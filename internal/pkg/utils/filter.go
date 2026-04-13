@@ -113,6 +113,36 @@ type ArticleFilter struct {
 	Offset    int    `form:"offset,default=0"`
 }
 
+type CourseFilter struct {
+	Search    string `form:"search"`
+	Audiences string `form:"audiences"` // comma-separated audience names
+	SortField string `form:"sortField"` // createdAt | updatedAt, default createdAt
+	SortOrder string `form:"sortOrder"` // asc | desc, default desc
+	Limit     int    `form:"limit,default=15"`
+	Offset    int    `form:"offset,default=0"`
+}
+
+type EnquiryFilter struct {
+	Name   string `form:"name"`
+	Email  string `form:"email"`
+	Phone  string `form:"phone"`
+	Limit  int    `form:"limit,default=15"`
+	Offset int    `form:"offset,default=0"`
+}
+
+type JournalFilter struct {
+	Search string `form:"search"`
+	Year   int    `form:"year"`
+	Limit  int    `form:"limit,default=15"`
+	Offset int    `form:"offset,default=0"`
+}
+
+type EnrollmentFilter struct {
+	Search string `form:"search"` // matches name, email, or phone
+	Limit  int    `form:"limit,default=15"`
+	Offset int    `form:"offset,default=0"`
+}
+
 func ApplyUpcomingEventFilters(query *gorm.DB, filter Filter) *gorm.DB {
 	return query.Scopes(
 		ByLimit(filter.Limit),

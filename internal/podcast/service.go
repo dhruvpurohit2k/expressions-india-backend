@@ -87,6 +87,31 @@ func (s *Service) GetPodcastList(filter utils.PodcastFilter) ([]dto.PodcastListI
 	return result, total, nil
 }
 
+func (s *Service) UpdatePodcast(id string, req *dto.PodcastUpdateDTO) error {
+	var podcast models.Podcast
+	if err := s.db.Preload("Audiences").First(&podcast, "id = ?", id).Error; err != nil {
+		return err
+	}
+
+	podcast.Title = req.Title
+	podcast.Link = req.Link
+	podcast.Description = &req.Description
+	podcast.Tags = datatypes.JSON(req.Tags)
+	podcast.Transcript = req.Transcript
+
+	var audiences []models.Audience
+	if len(req.Audiences) > 0 {
+		if err := s.db.Where("name IN ?", req.Audiences).Find(&audiences).Error; err != nil {
+			return err
+		}
+	}
+	if err := s.db.Model(&podcast).Association("Audiences").Replace(audiences); err != nil {
+		return err
+	}
+
+	return s.db.Save(&podcast).Error
+}
+
 func (s *Service) DeletePodcast(id string) error {
 	var podcast models.Podcast
 	if err := s.db.First(&podcast, "id = ?", id).Error; err != nil {

@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"log"
 	"mime/multipart"
+	"strings"
 
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/dto"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/models"
+	"github.com/dhruvpurohit2k/expressions-india-backend/internal/pkg/utils"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/storage"
 	"golang.org/x/sync/errgroup"
 	"gorm.io/gorm"
@@ -22,9 +24,117 @@ func NewService(db *gorm.DB, s3 *storage.S3) *Service {
 	return &Service{db: db, s3: s3}
 }
 
+func (s *Service) GetCoursesListFiltered(filter utils.CourseFilter) ([]dto.CourseListItemDTO, int64, error) {
+	base := s.db.Model(&models.Course{})
+
+	if filter.Search != "" {
+		base = base.Where("LOWER(courses.title) LIKE LOWER(?)", "%"+filter.Search+"%")
+	}
+
+	if filter.Audiences != "" {
+		names := []string{}
+		for _, a := range strings.Split(filter.Audiences, ",") {
+			a = strings.TrimSpace(a)
+			if a != "" {
+				names = append(names, a)
+			}
+		}
+		if len(names) > 0 {
+			subquery := s.db.Table("course_audience").
+				Select("course_id").
+				Joins("JOIN audiences ON audiences.id = course_audience.audience_id").
+				Where("audiences.name IN ?", names)
+			base = base.Where("courses.id IN (?)", subquery)
+		}
+	}
+
+	var total int64
+	if err := base.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	sortField := "courses.created_at"
+	if filter.SortField == "updatedAt" {
+		sortField = "courses.updated_at"
+	}
+	order := sortField + " DESC"
+	if filter.SortOrder == "asc" {
+		order = sortField + " ASC"
+	}
+
+	var courses []models.Course
+	if err := base.Order(order).
+		Limit(filter.Limit).
+		Offset(filter.Offset).
+		Preload("Audiences").
+		Preload("Thumbnail").
+		Find(&courses).Error; err != nil {
+		return nil, 0, err
+	}
+
+	result := make([]dto.CourseListItemDTO, 0, len(courses))
+	for _, course := range courses {
+		item := dto.CourseListItemDTO{
+			ID:        course.ID,
+			Title:     course.Title,
+			CreatedAt: course.CreatedAt,
+			UpdatedAt: course.UpdatedAt,
+			Audiences: make([]string, 0, len(course.Audiences)),
+		}
+		if course.ThumbnailID != "" {
+			item.ThumbnailURL = &course.Thumbnail.URL
+		}
+		for _, audience := range course.Audiences {
+			item.Audiences = append(item.Audiences, audience.Name)
+		}
+		result = append(result, item)
+	}
+	return result, total, nil
+}
+
+func (s *Service) GetCoursesByAudience(audience string, limit int, offset int) ([]dto.CourseListItemDTO, int64, error) {
+	base := s.db.Model(&models.Course{}).
+		Where(
+			"courses.id IN (SELECT ca.course_id FROM course_audience ca JOIN audiences a ON a.id = ca.audience_id WHERE a.name = ? OR a.name = 'all')",
+			audience,
+		)
+
+	var total int64
+	if err := base.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var courses []models.Course
+	if err := base.Order("courses.created_at DESC").
+		Limit(limit).Offset(offset).
+		Preload("Audiences").Preload("Thumbnail").
+		Find(&courses).Error; err != nil {
+		return nil, 0, err
+	}
+
+	result := make([]dto.CourseListItemDTO, 0, len(courses))
+	for _, course := range courses {
+		item := dto.CourseListItemDTO{
+			ID:        course.ID,
+			Title:     course.Title,
+			CreatedAt: course.CreatedAt,
+			UpdatedAt: course.UpdatedAt,
+			Audiences: make([]string, 0, len(course.Audiences)),
+		}
+		if course.ThumbnailID != "" {
+			item.ThumbnailURL = &course.Thumbnail.URL
+		}
+		for _, a := range course.Audiences {
+			item.Audiences = append(item.Audiences, a.Name)
+		}
+		result = append(result, item)
+	}
+	return result, total, nil
+}
+
 func (s *Service) GetCoursesList() ([]dto.CourseListItemDTO, error) {
 	var courses []models.Course
-	if err := s.db.Preload("Audiences").Find(&courses).Error; err != nil {
+	if err := s.db.Preload("Audiences").Preload("Thumbnail").Find(&courses).Error; err != nil {
 		return nil, err
 	}
 	courseList := make([]dto.CourseListItemDTO, 0, len(courses))
@@ -35,6 +145,9 @@ func (s *Service) GetCoursesList() ([]dto.CourseListItemDTO, error) {
 			CreatedAt: course.CreatedAt,
 			UpdatedAt: course.UpdatedAt,
 			Audiences: make([]string, 0, len(course.Audiences)),
+		}
+		if course.ThumbnailID != "" {
+			item.ThumbnailURL = &course.Thumbnail.URL
 		}
 		for _, audience := range course.Audiences {
 			item.Audiences = append(item.Audiences, audience.Name)
@@ -52,18 +165,19 @@ func (s *Service) GetCourseById(id string) (*dto.CourseDTO, error) {
 		Preload("IntroductionVideo").
 		Preload("DownloadableContent").
 		Preload("Chapters").
-		Preload("Chapters.DownloadableContent").
-		Preload("Chapters.VideoLink").
 		First(&course).Error; err != nil {
 		return nil, err
 	}
 
 	result := &dto.CourseDTO{
-		ID:          course.ID,
-		Title:       course.Title,
-		Description: course.Description,
-		CreatedAt:   course.CreatedAt,
-		UpdatedAt:   course.UpdatedAt,
+		ID:                  course.ID,
+		Title:               course.Title,
+		Description:         course.Description,
+		CreatedAt:           course.CreatedAt,
+		UpdatedAt:           course.UpdatedAt,
+		Audiences:           []string{},
+		DownloadableContent: []dto.CourseMediaDTO{},
+		Chapters:            []dto.CourseChapterSummaryDTO{},
 	}
 
 	if course.ThumbnailID != "" {
@@ -90,23 +204,122 @@ func (s *Service) GetCourseById(id string) (*dto.CourseDTO, error) {
 	}
 
 	for _, ch := range course.Chapters {
-		chDTO := dto.CourseChapterDTO{
-			ID:          ch.ID,
-			Title:       ch.Title,
-			Description: ch.Description,
-			IsFree:      ch.IsFree,
-		}
-		if ch.VideoLinkID != "" {
-			chDTO.VideoLinkURL = ch.VideoLink.URL
-		}
-		for _, m := range ch.DownloadableContent {
-			chDTO.DownloadableContent = append(chDTO.DownloadableContent, dto.CourseMediaDTO{
-				ID: m.ID, Name: m.Name, URL: m.URL, FileType: m.FileType,
-			})
-		}
-		result.Chapters = append(result.Chapters, chDTO)
+		result.Chapters = append(result.Chapters, dto.CourseChapterSummaryDTO{
+			ID:     ch.ID,
+			Title:  ch.Title,
+			IsFree: ch.IsFree,
+		})
 	}
 
+	return result, nil
+}
+
+func (s *Service) GetEnrolledUsers(courseId string, filter utils.EnrollmentFilter) ([]dto.EnrolledUserDTO, int64, error) {
+	base := s.db.Model(&models.User{}).
+		Joins("JOIN course_users ON course_users.user_id = users.id").
+		Where("course_users.course_id = ?", courseId)
+
+	if filter.Search != "" {
+		like := "%" + filter.Search + "%"
+		base = base.Where("LOWER(users.name) LIKE LOWER(?) OR LOWER(users.email) LIKE LOWER(?) OR users.phone LIKE ?", like, like, like)
+	}
+
+	var total int64
+	if err := base.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var users []models.User
+	if err := base.Order("users.created_at DESC").Limit(filter.Limit).Offset(filter.Offset).Find(&users).Error; err != nil {
+		return nil, 0, err
+	}
+
+	result := make([]dto.EnrolledUserDTO, 0, len(users))
+	for _, u := range users {
+		result = append(result, dto.EnrolledUserDTO{ID: u.ID, Email: u.Email, Name: u.Name, Phone: u.Phone})
+	}
+	return result, total, nil
+}
+
+func (s *Service) GetNotEnrolledUsers(courseId string, filter utils.EnrollmentFilter) ([]dto.EnrolledUserDTO, int64, error) {
+	base := s.db.Model(&models.User{}).
+		Where("users.id NOT IN (SELECT user_id FROM course_users WHERE course_id = ?)", courseId).
+		Where("users.is_admin = ?", false)
+
+	if filter.Search != "" {
+		like := "%" + filter.Search + "%"
+		base = base.Where("LOWER(users.name) LIKE LOWER(?) OR LOWER(users.email) LIKE LOWER(?) OR users.phone LIKE ?", like, like, like)
+	}
+
+	var total int64
+	if err := base.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var users []models.User
+	if err := base.Order("users.created_at DESC").Limit(filter.Limit).Offset(filter.Offset).Find(&users).Error; err != nil {
+		return nil, 0, err
+	}
+
+	result := make([]dto.EnrolledUserDTO, 0, len(users))
+	for _, u := range users {
+		result = append(result, dto.EnrolledUserDTO{ID: u.ID, Email: u.Email, Name: u.Name, Phone: u.Phone})
+	}
+	return result, total, nil
+}
+
+func (s *Service) EnrollUser(courseId, userId string) error {
+	var course models.Course
+	if err := s.db.First(&course, "id = ?", courseId).Error; err != nil {
+		return err
+	}
+	var user models.User
+	if err := s.db.First(&user, "id = ?", userId).Error; err != nil {
+		return err
+	}
+	return s.db.Model(&course).Association("Users").Append(&user)
+}
+
+func (s *Service) RevokeAccess(courseId, userId string) error {
+	var course models.Course
+	if err := s.db.First(&course, "id = ?", courseId).Error; err != nil {
+		return err
+	}
+	return s.db.Model(&course).Association("Users").Delete(&models.User{ID: userId})
+}
+
+// IsEnrolled reports whether userId is enrolled in courseId via the course_users join table.
+func (s *Service) IsEnrolled(courseId, userId string) (bool, error) {
+	var count int64
+	err := s.db.Table("course_users").
+		Where("course_id = ? AND user_id = ?", courseId, userId).
+		Count(&count).Error
+	return count > 0, err
+}
+
+func (s *Service) GetChapterById(courseId, chapterId string) (*dto.CourseChapterDTO, error) {
+	var ch models.CourseChapter
+	if err := s.db.Where("id = ? AND course_id = ?", chapterId, courseId).
+		Preload("DownloadableContent").
+		Preload("VideoLink").
+		First(&ch).Error; err != nil {
+		return nil, err
+	}
+
+	result := &dto.CourseChapterDTO{
+		ID:          ch.ID,
+		Title:       ch.Title,
+		Description: ch.Description,
+		IsFree:      ch.IsFree,
+	}
+	if ch.VideoLinkID != "" {
+		result.VideoLinkURL = ch.VideoLink.URL
+	}
+	for _, m := range ch.DownloadableContent {
+		result.DownloadableContent = append(result.DownloadableContent, dto.CourseMediaDTO{
+			ID: m.ID, Name: m.Name, URL: m.URL, FileType: m.FileType,
+		})
+	}
 	return result, nil
 }
 
@@ -134,7 +347,9 @@ func (s *Service) CreateCourse(data *dto.CourseCreateRequestDTO) error {
 		if err != nil {
 			return err
 		}
-		s.db.Create(&media)
+		if err := s.db.Create(&media).Error; err != nil {
+			return err
+		}
 		course.ThumbnailID = media.ID
 	}
 

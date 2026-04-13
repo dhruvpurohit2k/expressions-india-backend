@@ -91,6 +91,24 @@ func (ctrl *Controller) GetPodcastsByAudience(c *gin.Context) {
 	})
 }
 
+func (ctrl *Controller) Update(c *gin.Context) {
+	id := c.Param("id")
+	var req dto.PodcastUpdateDTO
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.Fail(c, http.StatusBadRequest, "BAD_REQUEST", "Invalid input")
+		return
+	}
+	if err := ctrl.service.UpdatePodcast(id, &req); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			utils.Fail(c, http.StatusNotFound, "NOT_FOUND", "Podcast not found")
+		} else {
+			utils.FailInternal(c, "UPDATE_ERROR", "Failed to update podcast", err)
+		}
+		return
+	}
+	utils.OK(c, nil)
+}
+
 func (ctrl *Controller) Create(c *gin.Context) {
 	var req dto.PodcastCreateDTO
 	if err := c.ShouldBind(&req); err != nil {

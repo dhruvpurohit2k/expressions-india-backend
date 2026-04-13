@@ -27,3 +27,12 @@ type PodcastCreateDTO struct {
 	Transcript  *string  `form:"transcript"`
 	Audiences   []string `form:"audiences"`
 }
+
+type PodcastUpdateDTO struct {
+	Title       string   `json:"title" binding:"required"`
+	Link        string   `json:"link" binding:"required"`
+	Description string   `json:"description"`
+	Tags        string   `json:"tags"`
+	Transcript  *string  `json:"transcript"`
+	Audiences   []string `json:"audiences"`
+}

@@ -11,6 +11,16 @@ type EnquiryListItemDTO struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+type EnquiryDetailDTO struct {
+	ID        string    `json:"id"`
+	Subject   string    `json:"subject"`
+	Name      string    `json:"name"`
+	Email     string    `json:"email"`
+	Phone     string    `json:"phone"`
+	Message   string    `json:"message"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 type EnquiryCreateDTO struct {
 	Subject string `form:"subject" json:"subject" binding:"required"`
 	Name    string `form:"name" json:"name" binding:"required"`

@@ -3,6 +3,7 @@ package journal
 import (
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/dto"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/models"
+	"github.com/dhruvpurohit2k/expressions-india-backend/internal/pkg/utils"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/storage"
 	"gorm.io/gorm"
 )
@@ -38,17 +39,23 @@ func (s *Service) Get() ([]dto.JournalListItemDTO, error) {
 	return journaldtos, nil
 }
 
-func (s *Service) GetJournalList(limit int, offset int) ([]dto.JournalListItemDTO, int64, error) {
+func (s *Service) GetJournalListFiltered(filter utils.JournalFilter) ([]dto.JournalListItemDTO, int64, error) {
 	var journals []models.Journal
 	var total int64
 
 	base := s.db.Model(&models.Journal{})
+	if filter.Search != "" {
+		base = base.Where("LOWER(title) LIKE LOWER(?)", "%"+filter.Search+"%")
+	}
+	if filter.Year > 0 {
+		base = base.Where("year = ?", filter.Year)
+	}
 
 	if err := base.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	if err := base.Order("year DESC, issue DESC").Limit(limit).Offset(offset).Find(&journals).Error; err != nil {
+	if err := base.Order("year DESC, issue DESC").Limit(filter.Limit).Offset(filter.Offset).Find(&journals).Error; err != nil {
 		return nil, 0, err
 	}
 

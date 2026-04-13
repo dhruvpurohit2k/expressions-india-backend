@@ -10,6 +10,7 @@ import (
 
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/article"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/audience"
+	"github.com/dhruvpurohit2k/expressions-india-backend/internal/auth"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/course"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/enquiry"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/event"
@@ -20,6 +21,7 @@ import (
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/podcast"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/promotion"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/storage"
+	"github.com/dhruvpurohit2k/expressions-india-backend/internal/team"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -39,6 +41,8 @@ type Server struct {
 	audienceController       *audience.Controller
 	latestActivityController *latestactivity.Controller
 	courseController         *course.Controller
+	authController           *auth.Controller
+	teamController           *team.Controller
 }
 
 func initServer() *Server {
@@ -48,6 +52,7 @@ func initServer() *Server {
 
 	if os.Getenv("DB_FRESH_START") == "true" {
 		db.Migrator().DropTable(
+			&models.User{},
 			&models.Event{},
 			&models.Media{},
 			&models.Audience{},
@@ -61,9 +66,12 @@ func initServer() *Server {
 			&models.Article{},
 			&models.Course{},
 			&models.CourseChapter{},
+			&models.Team{},
+			&models.Member{},
 		)
 	}
 	err := db.AutoMigrate(
+		&models.User{},
 		&models.Event{},
 		&models.Media{},
 		&models.Audience{},
@@ -77,6 +85,8 @@ func initServer() *Server {
 		&models.Article{},
 		&models.Course{},
 		&models.CourseChapter{},
+		&models.Team{},
+		&models.Member{},
 	)
 	if err != nil {
 		log.Fatal(err.Error())
@@ -112,17 +122,26 @@ func initServer() *Server {
 	courseService := course.NewService(db, s3)
 	courseController := course.NewController(courseService)
 
+	authService := auth.NewService(db)
+	authController := auth.NewController(authService)
+
+	teamService := team.NewService(db)
+	teamController := team.NewController(teamService)
+
 	r := gin.Default()
-	if allowedOrigins := os.Getenv("ALLOWED_ORIGINS"); allowedOrigins != "" {
-		r.Use(cors.New(cors.Config{
-			AllowOrigins: strings.Split(allowedOrigins, ","),
-			AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-			AllowHeaders: []string{"Origin", "Content-Type"},
-			MaxAge:       12 * time.Hour,
-		}))
-	} else {
-		r.Use(cors.Default())
+	corsConfig := cors.Config{
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		MaxAge:           12 * time.Hour,
+		AllowCredentials: true,
 	}
+	if allowedOrigins := os.Getenv("ALLOWED_ORIGINS"); allowedOrigins != "" {
+		corsConfig.AllowOrigins = strings.Split(allowedOrigins, ",")
+	} else {
+		// Dev fallback: allow common local dev servers.
+		corsConfig.AllowOrigins = []string{"http://localhost:5173", "http://localhost:3000"}
+	}
+	r.Use(cors.New(corsConfig))
 	return &Server{
 		r:                        r,
 		db:                       db,
@@ -136,6 +155,8 @@ func initServer() *Server {
 		audienceController:       audienceController,
 		latestActivityController: latestActivityController,
 		courseController:         courseController,
+		authController:           authController,
+		teamController:           teamController,
 	}
 }
 
@@ -145,7 +166,19 @@ func (s *Server) SetupRoutes() {
 			"message": "Success",
 		})
 	})
-	groupAdmin := s.r.Group("/admin")
+
+	groupAuth := s.r.Group("/auth")
+	{
+		groupAuth.POST("/login", s.authController.Login)
+		groupAuth.POST("/refresh", s.authController.Refresh)
+		groupAuth.POST("/logout", s.authController.Logout)
+		// Signup is public — anyone can create a non-admin account.
+		groupAuth.POST("/signup", s.authController.Signup)
+		// Register is admin-only: only an existing admin can create new users.
+		groupAuth.POST("/register", auth.RequireAdmin(), s.authController.Register)
+	}
+
+	groupAdmin := s.r.Group("/admin", auth.RequireAdmin())
 	{
 		groupAdmin.GET("/allEvents", s.eventController.GetAll)
 		groupAdmin.GET("/event", s.eventController.GetEventList)
@@ -160,12 +193,13 @@ func (s *Server) SetupRoutes() {
 		groupAdmin.GET("/promotion", s.promotionController.Get)
 		groupAdmin.GET("/promotion/:id", s.promotionController.GetById)
 
-		groupAdmin.GET("/podcast", s.podcastController.Get)
+		groupAdmin.GET("/podcast", s.podcastController.GetPodcastList)
 		groupAdmin.GET("/podcast/:id", s.podcastController.GetById)
 		groupAdmin.POST("/podcast", s.podcastController.Create)
+		groupAdmin.PUT("/podcast/:id", s.podcastController.Update)
 		groupAdmin.DELETE("/podcast/:id", s.podcastController.Delete)
 
-		groupAdmin.GET("/enquiry", s.enquiryController.Get)
+		groupAdmin.GET("/enquiry", s.enquiryController.GetList)
 		groupAdmin.GET("/enquiry/:id", s.enquiryController.GetById)
 		groupAdmin.DELETE("/enquiry/:id", s.enquiryController.Delete)
 
@@ -181,11 +215,21 @@ func (s *Server) SetupRoutes() {
 		groupAdmin.PUT("/article/:id", s.articleController.Update)
 		groupAdmin.DELETE("/article/:id", s.articleController.Delete)
 
-		groupAdmin.GET("/course", s.courseController.GetCoursesList)
+		groupAdmin.GET("/course", s.courseController.GetCoursesListAdmin)
 		groupAdmin.GET("/course/:id", s.courseController.GetCourseById)
 		groupAdmin.POST("/course", s.courseController.Create)
 		groupAdmin.PUT("/course/:id", s.courseController.Update)
 		groupAdmin.DELETE("/course/:id", s.courseController.Delete)
+		groupAdmin.GET("/course/:id/enrolled", s.courseController.GetEnrolledUsers)
+		groupAdmin.DELETE("/course/:id/enrolled/:userId", s.courseController.RevokeAccess)
+		groupAdmin.GET("/course/:id/not-enrolled", s.courseController.GetNotEnrolledUsers)
+		groupAdmin.POST("/course/:id/enroll", s.courseController.EnrollUser)
+
+		groupAdmin.GET("/team", s.teamController.GetList)
+		groupAdmin.GET("/team/:id", s.teamController.GetById)
+		groupAdmin.POST("/team", s.teamController.Create)
+		groupAdmin.PUT("/team/:id", s.teamController.Update)
+		groupAdmin.DELETE("/team/:id", s.teamController.Delete)
 	}
 	groupApi := s.r.Group("/api")
 	{
@@ -197,7 +241,7 @@ func (s *Server) SetupRoutes() {
 		groupApi.GET("/event/:id", s.eventController.GetEventById)
 		groupApi.GET("/podcast", s.podcastController.GetPodcastList)
 		groupApi.GET("/podcast/:id", s.podcastController.GetById)
-		groupApi.GET("/journal", s.journalController.GetJournalList)
+		groupApi.GET("/journal", s.journalController.GetList)
 		groupApi.GET("/journal/:id", s.journalController.GetById)
 		groupApi.POST("/enquiry", s.enquiryController.CreateEnquiry)
 		groupApi.GET("/article", s.articleController.GetArticleListPaginated)
@@ -207,6 +251,12 @@ func (s *Server) SetupRoutes() {
 		groupApi.GET("/event/audience/:audience", s.eventController.GetUpcomingEventsByAudience)
 		groupApi.GET("/audience/:name", s.audienceController.GetAudienceByName)
 		groupApi.GET("/latest-activity", s.latestActivityController.GetLatestActivity)
+		groupApi.GET("/course", s.courseController.GetCoursesList)
+		groupApi.GET("/course/audience/:audience", s.courseController.GetCoursesByAudience)
+		groupApi.GET("/course/:id", s.courseController.GetCourseById)
+		groupApi.GET("/course/:id/chapter/:chapterId", auth.TryExtractClaims(), s.courseController.GetChapterById)
+		groupApi.GET("/team", s.teamController.GetList)
+		groupApi.GET("/team/:id", s.teamController.GetById)
 	}
 
 }

@@ -281,7 +281,10 @@ func (s *Service) GetEventList(eventFilter utils.Filter) ([]dto.EventListItemDTO
 
 func (s *Service) UpdateEvent(id string, newData *dto.EventUpdateRequestDTO) (retErr error) {
 	var event models.Event
-	if err := s.db.First(&event, "id = ?", id).Error; err != nil {
+	if err := s.db.
+		Preload("VideoLinks").
+		Preload("PromotionalVideoLinks").
+		First(&event, "id = ?", id).Error; err != nil {
 		return err
 	}
 	event.Title = newData.Title
@@ -422,6 +425,16 @@ func (s *Service) UpdateEvent(id string, newData *dto.EventUpdateRequestDTO) (re
 		}
 	}
 
+	// Replace video links: clear old association + delete old Link rows, then create new ones.
+	oldVideoLinks := event.VideoLinks
+	if err := s.db.Model(&event).Association("VideoLinks").Clear(); err != nil {
+		return err
+	}
+	for _, link := range oldVideoLinks {
+		if err := s.db.Delete(&models.Link{}, "id = ?", link.ID).Error; err != nil {
+			log.Printf("failed to delete video link %s: %v", link.ID, err)
+		}
+	}
 	if len(newData.VideoLinks) > 0 {
 		newLinks, err := s.getLink(newData.VideoLinks)
 		if err != nil {
@@ -429,6 +442,17 @@ func (s *Service) UpdateEvent(id string, newData *dto.EventUpdateRequestDTO) (re
 		}
 		if err := s.db.Model(&event).Association("VideoLinks").Append(newLinks); err != nil {
 			return err
+		}
+	}
+
+	// Replace promotional video links the same way.
+	oldPromoLinks := event.PromotionalVideoLinks
+	if err := s.db.Model(&event).Association("PromotionalVideoLinks").Clear(); err != nil {
+		return err
+	}
+	for _, link := range oldPromoLinks {
+		if err := s.db.Delete(&models.Link{}, "id = ?", link.ID).Error; err != nil {
+			log.Printf("failed to delete promotional video link %s: %v", link.ID, err)
 		}
 	}
 	if len(newData.PromotionalVideoLinks) > 0 {
@@ -545,12 +569,20 @@ func (s *Service) cleanupEventUploads(event *models.Event, thumbnailPersistedToD
 
 func (s *Service) DeleteEvent(id string) error {
 	var event models.Event
-	if err := s.db.Preload("Thumbnail").Preload("PromotionalMedia").Preload("Medias").Preload("Documents").Preload("VideoLinks").Preload("Audiences").First(&event, "id = ?", id).Error; err != nil {
+	if err := s.db.
+		Preload("Thumbnail").
+		Preload("PromotionalMedia").
+		Preload("Medias").
+		Preload("Documents").
+		Preload("VideoLinks").
+		Preload("PromotionalVideoLinks").
+		Preload("Audiences").
+		First(&event, "id = ?", id).Error; err != nil {
 		return err
 	}
 
 	allMedia := append(append(event.PromotionalMedia, event.Medias...), event.Documents...)
-	videoLinks := event.VideoLinks
+	allLinks := append(event.VideoLinks, event.PromotionalVideoLinks...)
 
 	// Clear all junction-table associations first.
 	if err := s.db.Model(&event).Association("PromotionalMedia").Clear(); err != nil {
@@ -563,6 +595,9 @@ func (s *Service) DeleteEvent(id string) error {
 		return err
 	}
 	if err := s.db.Model(&event).Association("VideoLinks").Clear(); err != nil {
+		return err
+	}
+	if err := s.db.Model(&event).Association("PromotionalVideoLinks").Clear(); err != nil {
 		return err
 	}
 	if err := s.db.Model(&event).Association("Audiences").Clear(); err != nil {
@@ -594,7 +629,7 @@ func (s *Service) DeleteEvent(id string) error {
 		}
 	}
 
-	for _, link := range videoLinks {
+	for _, link := range allLinks {
 		if err := s.db.Delete(&models.Link{}, "id = ?", link.ID).Error; err != nil {
 			return err
 		}

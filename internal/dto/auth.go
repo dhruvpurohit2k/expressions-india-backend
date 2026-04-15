@@ -22,8 +22,8 @@ type SignupRequest struct {
 }
 
 type AuthResponse struct {
-	AccessToken  string `json:"accessToken"` // returned in body so mobile clients can store it
-	RefreshToken string `json:"-"`
+	AccessToken  string `json:"accessToken"`
+	RefreshToken string `json:"refreshToken"` // also set as HttpOnly cookie; returned in body for mobile clients
 	UserID       string `json:"userId"`
 	Email        string `json:"email"`
 	Name         string `json:"name"`

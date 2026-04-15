@@ -1,11 +1,10 @@
 package event
 
 import (
-	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
-	"mime/multipart"
 	"time"
 
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/dto"
@@ -13,7 +12,6 @@ import (
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/pkg/utils"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/storage"
 	"github.com/google/uuid"
-	"golang.org/x/sync/errgroup"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
@@ -154,7 +152,7 @@ func (s *Service) GetEventById(id string) (*dto.EventDTO, error) {
 		Preload("Audiences").
 		First(&event).Error
 
-	var audiences []string
+	audiences := make([]string, 0, len(event.Audiences))
 	for _, audience := range event.Audiences {
 		audiences = append(audiences, audience.Name)
 	}
@@ -166,9 +164,8 @@ func (s *Service) GetEventById(id string) (*dto.EventDTO, error) {
 	return result, err
 }
 
-func (s *Service) CreateEvent(data *dto.EventCreateRequestDTO) (retErr error) {
+func (s *Service) CreateEvent(data *dto.EventCreateRequestDTO) error {
 	var newEvent models.Event
-	// ID is assigned by the BeforeCreate hook on models.Event
 	newEvent.Title = data.Title
 	newEvent.Description = data.Description
 	newEvent.Perks = datatypes.JSON(data.Perks)
@@ -189,20 +186,17 @@ func (s *Service) CreateEvent(data *dto.EventCreateRequestDTO) (retErr error) {
 		newEvent.RegistrationURL = *data.RegistrationURL
 	}
 
-	// Track whether thumbnail was persisted to DB so we can clean it up on failure.
-	var thumbnailPersistedToDB bool
-
-	defer func() {
-		if retErr != nil {
-			s.cleanupEventUploads(&newEvent, thumbnailPersistedToDB)
+	if data.ThumbnailUpload != "" {
+		ref, err := parseMediaRef(data.ThumbnailUpload)
+		if err != nil {
+			return fmt.Errorf("invalid thumbnailUpload: %w", err)
 		}
-	}()
-
-	if data.Thumbnail != nil {
-		if err := s.uploadThumbnail(&newEvent, data.Thumbnail); err != nil {
+		media := s.mediaFromRef(ref)
+		if err := s.db.Create(&media).Error; err != nil {
 			return err
 		}
-		thumbnailPersistedToDB = true
+		newEvent.ThumbnailID = &media.ID
+		newEvent.Thumbnail = &media
 	}
 
 	if len(data.Audiences) > 0 {
@@ -213,20 +207,26 @@ func (s *Service) CreateEvent(data *dto.EventCreateRequestDTO) (retErr error) {
 		newEvent.Audiences = audienceRows
 	}
 
-	if len(data.PromotionalMedia) > 0 {
-		if err := s.appendUploadedMedia(&newEvent.PromotionalMedia, data.PromotionalMedia); err != nil {
-			return err
+	if len(data.PromotionalMediaUploads) > 0 {
+		refs, err := parseMediaRefs(data.PromotionalMediaUploads)
+		if err != nil {
+			return fmt.Errorf("invalid promotionalMediaUploads: %w", err)
 		}
+		newEvent.PromotionalMedia = s.mediasFromRefs(refs)
 	}
-	if len(data.Documents) > 0 {
-		if err := s.appendUploadedMedia(&newEvent.Documents, data.Documents); err != nil {
-			return err
+	if len(data.DocumentUploads) > 0 {
+		refs, err := parseMediaRefs(data.DocumentUploads)
+		if err != nil {
+			return fmt.Errorf("invalid documentUploads: %w", err)
 		}
+		newEvent.Documents = s.mediasFromRefs(refs)
 	}
-	if len(data.Medias) > 0 {
-		if err := s.appendUploadedMedia(&newEvent.Medias, data.Medias); err != nil {
-			return err
+	if len(data.MediaUploads) > 0 {
+		refs, err := parseMediaRefs(data.MediaUploads)
+		if err != nil {
+			return fmt.Errorf("invalid mediaUploads: %w", err)
 		}
+		newEvent.Medias = s.mediasFromRefs(refs)
 	}
 	if len(data.VideoLinks) > 0 {
 		videoLinks, err := s.getLink(data.VideoLinks)
@@ -234,6 +234,13 @@ func (s *Service) CreateEvent(data *dto.EventCreateRequestDTO) (retErr error) {
 			return err
 		}
 		newEvent.VideoLinks = videoLinks
+	}
+	if len(data.PromotionalVideoLinks) > 0 {
+		promoLinks, err := s.getLink(data.PromotionalVideoLinks)
+		if err != nil {
+			return err
+		}
+		newEvent.PromotionalVideoLinks = promoLinks
 	}
 
 	return s.db.Create(&newEvent).Error
@@ -279,7 +286,7 @@ func (s *Service) GetEventList(eventFilter utils.Filter) ([]dto.EventListItemDTO
 	return eventList, total, nil
 }
 
-func (s *Service) UpdateEvent(id string, newData *dto.EventUpdateRequestDTO) (retErr error) {
+func (s *Service) UpdateEvent(id string, newData *dto.EventUpdateRequestDTO) error {
 	var event models.Event
 	if err := s.db.
 		Preload("VideoLinks").
@@ -320,46 +327,27 @@ func (s *Service) UpdateEvent(id string, newData *dto.EventUpdateRequestDTO) (re
 		event.RegistrationURL = *newData.RegistrationURL
 	}
 
-	// Track newly created resources so we can clean them up if db.Save fails at the end.
-	var newThumbnailID string
-	var newS3Keys []string
-
-	defer func() {
-		if retErr != nil {
-			// Roll back new thumbnail (DB record + S3 file).
-			if newThumbnailID != "" {
-				if err := s.db.Delete(&models.Media{}, "id = ?", newThumbnailID).Error; err != nil {
-					log.Printf("DB cleanup failed for thumbnail %s: %v", newThumbnailID, err)
-				}
-				if err := s.s3.Delete(newThumbnailID); err != nil {
-					log.Printf("S3 cleanup failed for thumbnail %s: %v", newThumbnailID, err)
-				}
-			}
-			// Roll back new media S3 files (not yet in DB, so S3 only).
-			for _, key := range newS3Keys {
-				if err := s.s3.Delete(key); err != nil {
-					log.Printf("S3 cleanup failed for key %s: %v", key, err)
-				}
-			}
-		}
-	}()
-
 	if newData.DeletedThumbnailId != nil && *newData.DeletedThumbnailId != "" {
 		if err := s.db.Delete(&models.Media{}, "id = ?", *newData.DeletedThumbnailId).Error; err != nil {
 			return err
 		}
-		// Best-effort: DB record is already gone; don't fail the request if S3 delete fails.
 		if err := s.s3.Delete(*newData.DeletedThumbnailId); err != nil {
 			log.Printf("S3 cleanup failed for deleted thumbnail %s: %v", *newData.DeletedThumbnailId, err)
 		}
 		event.ThumbnailID = nil
 		event.Thumbnail = nil
 	}
-	if newData.Thumbnail != nil {
-		if err := s.uploadThumbnail(&event, newData.Thumbnail); err != nil {
+	if newData.ThumbnailUpload != "" {
+		ref, err := parseMediaRef(newData.ThumbnailUpload)
+		if err != nil {
+			return fmt.Errorf("invalid thumbnailUpload: %w", err)
+		}
+		media := s.mediaFromRef(ref)
+		if err := s.db.Create(&media).Error; err != nil {
 			return err
 		}
-		newThumbnailID = event.Thumbnail.ID
+		event.ThumbnailID = &media.ID
+		event.Thumbnail = &media
 	}
 
 	if len(newData.Audiences) > 0 {
@@ -373,6 +361,9 @@ func (s *Service) UpdateEvent(id string, newData *dto.EventUpdateRequestDTO) (re
 	}
 
 	for _, mediaID := range newData.DeletedPromotionalMediaIds {
+		if err := s.db.Model(&event).Association("PromotionalMedia").Unscoped().Delete(&models.Media{ID: mediaID}); err != nil {
+			log.Printf("failed to unassociate promotional media %s: %v", mediaID, err)
+		}
 		if err := s.db.Delete(&models.Media{}, "id = ?", mediaID).Error; err != nil {
 			return err
 		}
@@ -381,6 +372,9 @@ func (s *Service) UpdateEvent(id string, newData *dto.EventUpdateRequestDTO) (re
 		}
 	}
 	for _, mediaID := range newData.DeletedMediaIds {
+		if err := s.db.Model(&event).Association("Medias").Unscoped().Delete(&models.Media{ID: mediaID}); err != nil {
+			log.Printf("failed to unassociate media %s: %v", mediaID, err)
+		}
 		if err := s.db.Delete(&models.Media{}, "id = ?", mediaID).Error; err != nil {
 			return err
 		}
@@ -389,6 +383,9 @@ func (s *Service) UpdateEvent(id string, newData *dto.EventUpdateRequestDTO) (re
 		}
 	}
 	for _, docID := range newData.DeletedDocumentIds {
+		if err := s.db.Model(&event).Association("Documents").Unscoped().Delete(&models.Media{ID: docID}); err != nil {
+			log.Printf("failed to unassociate document %s: %v", docID, err)
+		}
 		if err := s.db.Delete(&models.Media{}, "id = ?", docID).Error; err != nil {
 			return err
 		}
@@ -397,31 +394,31 @@ func (s *Service) UpdateEvent(id string, newData *dto.EventUpdateRequestDTO) (re
 		}
 	}
 
-	if len(newData.PromotionalMedia) > 0 {
-		before := len(event.PromotionalMedia)
-		if err := s.appendUploadedMedia(&event.PromotionalMedia, newData.PromotionalMedia); err != nil {
-			return err
+	if len(newData.PromotionalMediaUploads) > 0 {
+		refs, err := parseMediaRefs(newData.PromotionalMediaUploads)
+		if err != nil {
+			return fmt.Errorf("invalid promotionalMediaUploads: %w", err)
 		}
-		for _, m := range event.PromotionalMedia[before:] {
-			newS3Keys = append(newS3Keys, m.ID)
+		if err := s.db.Model(&event).Association("PromotionalMedia").Append(s.mediasFromRefs(refs)); err != nil {
+			return err
 		}
 	}
-	if len(newData.Documents) > 0 {
-		before := len(event.Documents)
-		if err := s.appendUploadedMedia(&event.Documents, newData.Documents); err != nil {
-			return err
+	if len(newData.DocumentUploads) > 0 {
+		refs, err := parseMediaRefs(newData.DocumentUploads)
+		if err != nil {
+			return fmt.Errorf("invalid documentUploads: %w", err)
 		}
-		for _, m := range event.Documents[before:] {
-			newS3Keys = append(newS3Keys, m.ID)
+		if err := s.db.Model(&event).Association("Documents").Append(s.mediasFromRefs(refs)); err != nil {
+			return err
 		}
 	}
-	if len(newData.Medias) > 0 {
-		before := len(event.Medias)
-		if err := s.appendUploadedMedia(&event.Medias, newData.Medias); err != nil {
-			return err
+	if len(newData.MediaUploads) > 0 {
+		refs, err := parseMediaRefs(newData.MediaUploads)
+		if err != nil {
+			return fmt.Errorf("invalid mediaUploads: %w", err)
 		}
-		for _, m := range event.Medias[before:] {
-			newS3Keys = append(newS3Keys, m.ID)
+		if err := s.db.Model(&event).Association("Medias").Append(s.mediasFromRefs(refs)); err != nil {
+			return err
 		}
 	}
 
@@ -475,96 +472,6 @@ func (s *Service) getAudience(audiences []string) ([]models.Audience, error) {
 		return nil, err
 	}
 	return audienceRows, nil
-}
-
-// appendUploadedMedia uploads files to S3 concurrently and appends the resulting Media records to dest.
-// If any upload fails, already-uploaded files are cleaned up before returning the error.
-func (s *Service) appendUploadedMedia(dest *[]models.Media, files []*multipart.FileHeader) error {
-	medias := make([]models.Media, len(files))
-	g, _ := errgroup.WithContext(context.Background())
-	for i, file := range files {
-		i, file := i, file
-		g.Go(func() error {
-			f, err := file.Open()
-			if err != nil {
-				return fmt.Errorf("failed to open %s: %w", file.Filename, err)
-			}
-			defer f.Close()
-			location, key, contentType, err := s.s3.UploadNetwork(f)
-			if err != nil {
-				return err
-			}
-			medias[i] = models.Media{ID: key, URL: location, FileType: contentType}
-			return nil
-		})
-	}
-	if err := g.Wait(); err != nil {
-		for _, m := range medias {
-			if m.ID != "" {
-				if delErr := s.s3.Delete(m.ID); delErr != nil {
-					log.Printf("S3 cleanup failed for key %s: %v", m.ID, delErr)
-				}
-			}
-		}
-		return err
-	}
-	*dest = append(*dest, medias...)
-	return nil
-}
-
-func (s *Service) uploadThumbnail(event *models.Event, file *multipart.FileHeader) error {
-	f, err := file.Open()
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	location, key, contentType, err := s.s3.UploadNetwork(f)
-	if err != nil {
-		return err
-	}
-	media := models.Media{ID: key, URL: location, FileType: contentType}
-	if err := s.db.Create(&media).Error; err != nil {
-		s.s3.Delete(key)
-		return err
-	}
-	event.ThumbnailID = &media.ID
-	event.Thumbnail = &media
-	return nil
-}
-
-// cleanupEventUploads removes any S3 files (and DB thumbnail record if already created) on failure.
-func (s *Service) cleanupEventUploads(event *models.Event, thumbnailPersistedToDB bool) {
-	if event.Thumbnail != nil {
-		if thumbnailPersistedToDB {
-			if err := s.db.Delete(&models.Media{}, "id = ?", event.Thumbnail.ID).Error; err != nil {
-				log.Printf("DB cleanup failed for thumbnail %s: %v", event.Thumbnail.ID, err)
-			}
-		}
-		if err := s.s3.Delete(event.Thumbnail.ID); err != nil {
-			log.Printf("S3 cleanup failed for thumbnail %s: %v", event.Thumbnail.ID, err)
-		}
-	}
-	for _, m := range event.PromotionalMedia {
-		if m.ID != "" {
-			if err := s.s3.Delete(m.ID); err != nil {
-				log.Printf("S3 cleanup failed for key %s: %v", m.ID, err)
-			}
-		}
-	}
-	for _, m := range event.Documents {
-		if m.ID != "" {
-			if err := s.s3.Delete(m.ID); err != nil {
-				log.Printf("S3 cleanup failed for key %s: %v", m.ID, err)
-			}
-		}
-	}
-	for _, m := range event.Medias {
-		if m.ID != "" {
-			if err := s.s3.Delete(m.ID); err != nil {
-				log.Printf("S3 cleanup failed for key %s: %v", m.ID, err)
-			}
-		}
-	}
 }
 
 func (s *Service) DeleteEvent(id string) error {
@@ -698,7 +605,7 @@ func (s *Service) GetCompletedCarouselImages() ([]string, error) {
 	var events []models.Event
 	if err := s.db.Model(&models.Event{}).
 		Where("status = ?", "completed").
-		Preload("PromotionalMedia").
+		Preload("Medias").
 		Order("end_date DESC").
 		Limit(4).
 		Find(&events).Error; err != nil {
@@ -708,7 +615,7 @@ func (s *Service) GetCompletedCarouselImages() ([]string, error) {
 	var urls []string
 	for _, e := range events {
 		count := 0
-		for _, m := range e.PromotionalMedia {
+		for _, m := range e.Medias {
 			if count >= 3 {
 				break
 			}
@@ -719,6 +626,43 @@ func (s *Service) GetCompletedCarouselImages() ([]string, error) {
 		}
 	}
 	return urls, nil
+}
+
+func (s *Service) mediaFromRef(ref dto.UploadedMediaRef) models.Media {
+	return models.Media{
+		ID:       ref.ID,
+		Name:     ref.Name,
+		URL:      s.s3.PublicURL(ref.ID),
+		FileType: ref.FileType,
+	}
+}
+
+func (s *Service) mediasFromRefs(refs []dto.UploadedMediaRef) []models.Media {
+	medias := make([]models.Media, len(refs))
+	for i, ref := range refs {
+		medias[i] = s.mediaFromRef(ref)
+	}
+	return medias
+}
+
+func parseMediaRef(jsonStr string) (dto.UploadedMediaRef, error) {
+	var ref dto.UploadedMediaRef
+	if err := json.Unmarshal([]byte(jsonStr), &ref); err != nil {
+		return ref, fmt.Errorf("invalid media ref JSON: %w", err)
+	}
+	return ref, nil
+}
+
+func parseMediaRefs(jsonStrs []string) ([]dto.UploadedMediaRef, error) {
+	refs := make([]dto.UploadedMediaRef, 0, len(jsonStrs))
+	for _, s := range jsonStrs {
+		ref, err := parseMediaRef(s)
+		if err != nil {
+			return nil, err
+		}
+		refs = append(refs, ref)
+	}
+	return refs, nil
 }
 
 func (s *Service) getLink(links []string) ([]models.Link, error) {

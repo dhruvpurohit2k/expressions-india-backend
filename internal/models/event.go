@@ -25,7 +25,7 @@ type Event struct {
 	CreatedAt             time.Time      `json:"createdAt"`
 	UpdatedAt             time.Time      `json:"updatedAt"`
 	DeletedAt             gorm.DeletedAt `gorm:"index" json:"-"`
-	RegistrationURL       string         `gorm:"not null" json:"registrationUrl"`
+	RegistrationURL       string         `gorm:"type:text;default:''" json:"registrationUrl"`
 	ThumbnailID           *string        `gorm:"type:uuid" json:"thumbnailId"`
 	Thumbnail             *Media         `gorm:"foreignKey:ThumbnailID" json:"thumbnail"`
 	PromotionalMedia      []Media        `gorm:"many2many:event_promotional_media;" json:"promotionalMedia"`

@@ -2,6 +2,7 @@ package auth
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/dto"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/pkg/utils"
@@ -49,8 +50,21 @@ func (ctrl *Controller) Login(c *gin.Context) {
 }
 
 func (ctrl *Controller) Refresh(c *gin.Context) {
-	raw, err := c.Cookie(cookieRefresh)
-	if err != nil || raw == "" {
+	// Web clients send the refresh token as an HttpOnly cookie.
+	// Mobile clients (no cookie support) send it in the JSON body.
+	var raw string
+	if cookie, err := c.Cookie(cookieRefresh); err == nil && cookie != "" {
+		raw = cookie
+	}
+	if raw == "" {
+		var body struct {
+			RefreshToken string `json:"refreshToken"`
+		}
+		if err := c.ShouldBindJSON(&body); err == nil {
+			raw = body.RefreshToken
+		}
+	}
+	if raw == "" {
 		utils.Fail(c, http.StatusUnauthorized, "AUTH_ERROR", "missing refresh token")
 		return
 	}
@@ -83,8 +97,12 @@ func (ctrl *Controller) Signup(c *gin.Context) {
 	}
 	resp, err := ctrl.service.Signup(req)
 	if err != nil {
-		// Surface duplicate-email errors as a 409 so the client can show a useful message.
-		utils.Fail(c, http.StatusConflict, "SIGNUP_ERROR", "an account with this email already exists")
+		msg := err.Error()
+		if strings.Contains(msg, "UNIQUE") || strings.Contains(msg, "unique") || strings.Contains(msg, "duplicate") {
+			utils.Fail(c, http.StatusConflict, "SIGNUP_ERROR", "an account with this email already exists")
+		} else {
+			utils.FailInternal(c, "SIGNUP_ERROR", "could not create account", err)
+		}
 		return
 	}
 	utils.OK(c, resp)

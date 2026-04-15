@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -122,4 +123,27 @@ func (s *S3) Delete(s3Key string) error {
 		return err
 	}
 	return nil
+}
+
+// PresignUpload generates a presigned PUT URL for the given object key and
+// content type. The URL expires after ttl and the client must supply a
+// matching Content-Type header when uploading.
+func (s *S3) PresignUpload(id, contentType string, ttl time.Duration) (presignedURL string, err error) {
+	pc := s3.NewPresignClient(s.S3)
+	req, err := pc.PresignPutObject(context.TODO(), &s3.PutObjectInput{
+		Bucket:      aws.String("expressions-india"),
+		Key:         aws.String(id),
+		ContentType: aws.String(contentType),
+	}, func(o *s3.PresignOptions) {
+		o.Expires = ttl
+	})
+	if err != nil {
+		return "", fmt.Errorf("presign failed: %w", err)
+	}
+	return req.URL, nil
+}
+
+// PublicURL returns the publicly accessible URL for an already-uploaded object.
+func (s *S3) PublicURL(id string) string {
+	return fmt.Sprintf("%s/expressions-india/%s", os.Getenv("S3_URL"), id)
 }

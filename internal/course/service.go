@@ -1,17 +1,15 @@
 package course
 
 import (
-	"context"
+	"encoding/json"
 	"fmt"
 	"log"
-	"mime/multipart"
 	"strings"
 
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/dto"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/models"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/pkg/utils"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/storage"
-	"golang.org/x/sync/errgroup"
 	"gorm.io/gorm"
 )
 
@@ -193,6 +191,10 @@ func (s *Service) GetCourseById(id string) (*dto.CourseDTO, error) {
 		result.IntroductionVideoURL = course.IntroductionVideo.URL
 	}
 
+	if course.RegistrationURL != "" {
+		result.RegistrationURL = course.RegistrationURL
+	}
+
 	for _, a := range course.Audiences {
 		result.Audiences = append(result.Audiences, a.Name)
 	}
@@ -342,11 +344,12 @@ func (s *Service) CreateCourse(data *dto.CourseCreateRequestDTO) error {
 		course.Audiences = audiences
 	}
 
-	if data.Thumbnail != nil {
-		media, err := s.uploadSingleFile(data.Thumbnail, "")
+	if data.ThumbnailUpload != "" {
+		ref, err := parseMediaRef(data.ThumbnailUpload)
 		if err != nil {
-			return err
+			return fmt.Errorf("invalid thumbnailUpload: %w", err)
 		}
+		media := s.mediaFromRef(ref)
 		if err := s.db.Create(&media).Error; err != nil {
 			return err
 		}
@@ -361,22 +364,26 @@ func (s *Service) CreateCourse(data *dto.CourseCreateRequestDTO) error {
 		course.IntroductionVideoID = link.ID
 	}
 
+	if data.RegistrationURL != "" {
+		course.RegistrationURL = data.RegistrationURL
+	}
+
 	if err := s.db.Create(&course).Error; err != nil {
 		return err
 	}
 
-	if len(data.DocFiles) > 0 {
-		medias, err := s.uploadMediaFilesWithNames(data.DocFiles, data.DocNames)
+	if len(data.DocUploads) > 0 {
+		refs, err := parseMediaRefs(data.DocUploads)
 		if err != nil {
-			return err
+			return fmt.Errorf("invalid docUploads: %w", err)
 		}
+		medias := s.mediasFromRefs(refs)
 		if err := s.db.Model(&course).Association("DownloadableContent").Append(medias); err != nil {
 			return err
 		}
 	}
 
-	// Create chapters
-	if err := s.createChapters(course.ID, chapters, data.ChapterDocFiles); err != nil {
+	if err := s.createChapters(course.ID, chapters); err != nil {
 		return err
 	}
 
@@ -411,11 +418,12 @@ func (s *Service) UpdateCourse(id string, data *dto.CourseCreateRequestDTO) erro
 		}
 		course.ThumbnailID = ""
 	}
-	if data.Thumbnail != nil {
-		media, err := s.uploadSingleFile(data.Thumbnail, "")
+	if data.ThumbnailUpload != "" {
+		ref, err := parseMediaRef(data.ThumbnailUpload)
 		if err != nil {
-			return err
+			return fmt.Errorf("invalid thumbnailUpload: %w", err)
 		}
+		media := s.mediaFromRef(ref)
 		if err := s.db.Create(&media).Error; err != nil {
 			return err
 		}
@@ -441,6 +449,9 @@ func (s *Service) UpdateCourse(id string, data *dto.CourseCreateRequestDTO) erro
 		}
 		course.IntroductionVideoID = ""
 	}
+
+	// Handle registration URL
+	course.RegistrationURL = data.RegistrationURL
 
 	// Handle audience
 	if len(data.Audiences) > 0 {
@@ -468,11 +479,12 @@ func (s *Service) UpdateCourse(id string, data *dto.CourseCreateRequestDTO) erro
 	}
 
 	// Upload new course-level docs
-	if len(data.DocFiles) > 0 {
-		medias, err := s.uploadMediaFilesWithNames(data.DocFiles, data.DocNames)
+	if len(data.DocUploads) > 0 {
+		refs, err := parseMediaRefs(data.DocUploads)
 		if err != nil {
-			return err
+			return fmt.Errorf("invalid docUploads: %w", err)
 		}
+		medias := s.mediasFromRefs(refs)
 		if err := s.db.Model(&course).Association("DownloadableContent").Append(medias); err != nil {
 			return err
 		}
@@ -483,7 +495,7 @@ func (s *Service) UpdateCourse(id string, data *dto.CourseCreateRequestDTO) erro
 	}
 
 	// Handle chapters
-	if err := s.syncChapters(&course, chapters, data.ChapterDocFiles, data.DeletedChapterIds); err != nil {
+	if err := s.syncChapters(&course, chapters, data.DeletedChapterIds); err != nil {
 		return err
 	}
 
@@ -534,9 +546,7 @@ func (s *Service) DeleteCourse(id string) error {
 }
 
 // createChapters creates new chapters for a course.
-// chapterDocFiles is a flat array matched by newDocNames order across chapters.
-func (s *Service) createChapters(courseID string, chapters []dto.ChapterInput, chapterDocFiles []*multipart.FileHeader) error {
-	fileIdx := 0
+func (s *Service) createChapters(courseID string, chapters []dto.ChapterInput) error {
 	for _, ch := range chapters {
 		chapter := models.CourseChapter{
 			CourseID:    courseID,
@@ -557,31 +567,18 @@ func (s *Service) createChapters(courseID string, chapters []dto.ChapterInput, c
 			return err
 		}
 
-		// Upload docs for this chapter
-		numNewDocs := len(ch.NewDocNames)
-		if numNewDocs > 0 && fileIdx < len(chapterDocFiles) {
-			end := fileIdx + numNewDocs
-			if end > len(chapterDocFiles) {
-				end = len(chapterDocFiles)
-			}
-			files := chapterDocFiles[fileIdx:end]
-			names := ch.NewDocNames[:len(files)]
-			medias, err := s.uploadMediaFilesWithNames(files, names)
-			if err != nil {
-				return err
-			}
+		if len(ch.NewDocUploads) > 0 {
+			medias := s.mediasFromRefs(ch.NewDocUploads)
 			if err := s.db.Model(&chapter).Association("DownloadableContent").Append(medias); err != nil {
 				return err
 			}
-			fileIdx = end
 		}
 	}
 	return nil
 }
 
 // syncChapters handles create/update/delete of chapters during course update.
-func (s *Service) syncChapters(course *models.Course, chapters []dto.ChapterInput, chapterDocFiles []*multipart.FileHeader, deletedChapterIds []string) error {
-	// Delete explicitly removed chapters
+func (s *Service) syncChapters(course *models.Course, chapters []dto.ChapterInput, deletedChapterIds []string) error {
 	for _, chId := range deletedChapterIds {
 		var ch models.CourseChapter
 		if err := s.db.Preload("DownloadableContent").Preload("VideoLink").First(&ch, "id = ?", chId).Error; err != nil {
@@ -592,20 +589,7 @@ func (s *Service) syncChapters(course *models.Course, chapters []dto.ChapterInpu
 		}
 	}
 
-	fileIdx := 0
 	for _, chInput := range chapters {
-		numNewDocs := len(chInput.NewDocNames)
-
-		var files []*multipart.FileHeader
-		if numNewDocs > 0 && fileIdx < len(chapterDocFiles) {
-			end := fileIdx + numNewDocs
-			if end > len(chapterDocFiles) {
-				end = len(chapterDocFiles)
-			}
-			files = chapterDocFiles[fileIdx:end]
-			fileIdx = end
-		}
-
 		if chInput.ID == "" {
 			// New chapter
 			chapter := models.CourseChapter{
@@ -624,12 +608,8 @@ func (s *Service) syncChapters(course *models.Course, chapters []dto.ChapterInpu
 			if err := s.db.Create(&chapter).Error; err != nil {
 				return err
 			}
-			if len(files) > 0 {
-				names := chInput.NewDocNames[:len(files)]
-				medias, err := s.uploadMediaFilesWithNames(files, names)
-				if err != nil {
-					return err
-				}
+			if len(chInput.NewDocUploads) > 0 {
+				medias := s.mediasFromRefs(chInput.NewDocUploads)
 				if err := s.db.Model(&chapter).Association("DownloadableContent").Append(medias); err != nil {
 					return err
 				}
@@ -638,13 +618,12 @@ func (s *Service) syncChapters(course *models.Course, chapters []dto.ChapterInpu
 			// Update existing chapter
 			var chapter models.CourseChapter
 			if err := s.db.Preload("DownloadableContent").Preload("VideoLink").First(&chapter, "id = ?", chInput.ID).Error; err != nil {
-				continue
+				return fmt.Errorf("chapter %s not found: %w", chInput.ID, err)
 			}
 			chapter.Title = chInput.Title
 			chapter.Description = chInput.Description
 			chapter.IsFree = chInput.IsFree
 
-			// Handle video link
 			if chInput.VideoUrl != "" {
 				if chapter.VideoLinkID != "" {
 					if err := s.db.Model(&chapter.VideoLink).Update("url", chInput.VideoUrl).Error; err != nil {
@@ -664,7 +643,6 @@ func (s *Service) syncChapters(course *models.Course, chapters []dto.ChapterInpu
 				chapter.VideoLinkID = ""
 			}
 
-			// Delete removed docs
 			for _, docId := range chInput.DeletedDocIds {
 				if err := s.db.Model(&chapter).Association("DownloadableContent").Unscoped().Delete(&models.Media{ID: docId}); err != nil {
 					log.Printf("failed to unassociate chapter doc %s: %v", docId, err)
@@ -674,13 +652,8 @@ func (s *Service) syncChapters(course *models.Course, chapters []dto.ChapterInpu
 				}
 			}
 
-			// Upload new docs
-			if len(files) > 0 {
-				names := chInput.NewDocNames[:len(files)]
-				medias, err := s.uploadMediaFilesWithNames(files, names)
-				if err != nil {
-					return err
-				}
+			if len(chInput.NewDocUploads) > 0 {
+				medias := s.mediasFromRefs(chInput.NewDocUploads)
 				if err := s.db.Model(&chapter).Association("DownloadableContent").Append(medias); err != nil {
 					return err
 				}
@@ -726,51 +699,44 @@ func (s *Service) resolveAudiences(names []string) ([]models.Audience, error) {
 	return audiences, nil
 }
 
-func (s *Service) uploadSingleFile(file *multipart.FileHeader, name string) (models.Media, error) {
-	f, err := file.Open()
-	if err != nil {
-		return models.Media{}, fmt.Errorf("failed to open file: %w", err)
+// mediaFromRef builds a Media record from a pre-uploaded file reference.
+// The S3 object is already uploaded; this just creates the DB record.
+func (s *Service) mediaFromRef(ref dto.UploadedMediaRef) models.Media {
+	return models.Media{
+		ID:       ref.ID,
+		Name:     ref.Name,
+		URL:      s.s3.PublicURL(ref.ID),
+		FileType: ref.FileType,
 	}
-	defer f.Close()
-	location, key, contentType, err := s.s3.UploadNetwork(f)
-	if err != nil {
-		return models.Media{}, err
-	}
-	return models.Media{ID: key, Name: name, URL: location, FileType: contentType}, nil
 }
 
-func (s *Service) uploadMediaFilesWithNames(files []*multipart.FileHeader, names []string) ([]models.Media, error) {
-	medias := make([]models.Media, len(files))
-	g, _ := errgroup.WithContext(context.Background())
-	for i, file := range files {
-		i, file := i, file
-		name := ""
-		if i < len(names) {
-			name = names[i]
-		}
-		g.Go(func() error {
-			f, err := file.Open()
-			if err != nil {
-				return fmt.Errorf("failed to open %s: %w", file.Filename, err)
-			}
-			defer f.Close()
-			location, key, contentType, err := s.s3.UploadNetwork(f)
-			if err != nil {
-				return err
-			}
-			medias[i] = models.Media{ID: key, Name: name, URL: location, FileType: contentType}
-			return nil
-		})
+// mediasFromRefs builds Media records from a slice of pre-uploaded file references.
+func (s *Service) mediasFromRefs(refs []dto.UploadedMediaRef) []models.Media {
+	medias := make([]models.Media, len(refs))
+	for i, ref := range refs {
+		medias[i] = s.mediaFromRef(ref)
 	}
-	if err := g.Wait(); err != nil {
-		for _, m := range medias {
-			if m.ID != "" {
-				if delErr := s.s3.Delete(m.ID); delErr != nil {
-					log.Printf("S3 cleanup failed for key %s: %v", m.ID, delErr)
-				}
-			}
-		}
-		return nil, err
+	return medias
+}
+
+// parseMediaRef decodes a JSON-encoded UploadedMediaRef from a form field value.
+func parseMediaRef(jsonStr string) (dto.UploadedMediaRef, error) {
+	var ref dto.UploadedMediaRef
+	if err := json.Unmarshal([]byte(jsonStr), &ref); err != nil {
+		return dto.UploadedMediaRef{}, err
 	}
-	return medias, nil
+	return ref, nil
+}
+
+// parseMediaRefs decodes a slice of JSON-encoded UploadedMediaRef values.
+func parseMediaRefs(jsonStrs []string) ([]dto.UploadedMediaRef, error) {
+	refs := make([]dto.UploadedMediaRef, 0, len(jsonStrs))
+	for _, s := range jsonStrs {
+		ref, err := parseMediaRef(s)
+		if err != nil {
+			return nil, fmt.Errorf("invalid media ref %q: %w", s, err)
+		}
+		refs = append(refs, ref)
+	}
+	return refs, nil
 }

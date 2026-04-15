@@ -22,6 +22,7 @@ import (
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/promotion"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/storage"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/team"
+	"github.com/dhruvpurohit2k/expressions-india-backend/internal/upload"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -43,6 +44,7 @@ type Server struct {
 	courseController         *course.Controller
 	authController           *auth.Controller
 	teamController           *team.Controller
+	uploadController         *upload.Controller
 }
 
 func initServer() *Server {
@@ -55,7 +57,6 @@ func initServer() *Server {
 			&models.User{},
 			&models.Event{},
 			&models.Media{},
-			&models.Audience{},
 			&models.Promotion{},
 			&models.Link{},
 			&models.Journal{},
@@ -70,6 +71,7 @@ func initServer() *Server {
 			&models.Member{},
 		)
 	}
+	db.Migrator().DropTable(&models.Audience{})
 	err := db.AutoMigrate(
 		&models.User{},
 		&models.Event{},
@@ -128,6 +130,8 @@ func initServer() *Server {
 	teamService := team.NewService(db)
 	teamController := team.NewController(teamService)
 
+	uploadController := upload.NewController(s3)
+
 	r := gin.Default()
 	corsConfig := cors.Config{
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -157,6 +161,7 @@ func initServer() *Server {
 		courseController:         courseController,
 		authController:           authController,
 		teamController:           teamController,
+		uploadController:         uploadController,
 	}
 }
 
@@ -180,6 +185,8 @@ func (s *Server) SetupRoutes() {
 
 	groupAdmin := s.r.Group("/admin", auth.RequireAdmin())
 	{
+		groupAdmin.POST("/upload/presign", s.uploadController.Presign)
+
 		groupAdmin.GET("/allEvents", s.eventController.GetAll)
 		groupAdmin.GET("/event", s.eventController.GetEventList)
 		groupAdmin.GET("/event/:id", s.eventController.GetEventById)

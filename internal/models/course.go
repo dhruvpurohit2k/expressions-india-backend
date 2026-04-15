@@ -30,6 +30,7 @@ type Course struct {
 	DownloadableContent []Media    `gorm:"many2many:downloadable_content_course;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"downloadable_content"`
 	IntroductionVideoID string     `gorm:"type:uuid" json:"-"`
 	IntroductionVideo   Link       `gorm:"foreignKey:IntroductionVideoID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"introductionVideo"`
+	RegistrationURL     string     `gorm:"type:text" json:"registrationUrl"`
 	Audiences           []Audience      `gorm:"many2many:course_audience;" json:"audiences"`
 	Users               []User          `gorm:"many2many:course_users;" json:"users"`
 	Chapters            []CourseChapter `gorm:"foreignKey:CourseID" json:"chapters"`

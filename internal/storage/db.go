@@ -51,7 +51,10 @@ func InitDB() *gorm.DB {
 		log.Fatalf("Could not open DB after %d attempts: %v", maxAttempts, err)
 	}
 
-	sqlDB, _ := db.DB()
+	sqlDB, err := db.DB()
+	if err != nil {
+		log.Fatalf("failed to get underlying sql.DB: %v", err)
+	}
 	sqlDB.SetMaxIdleConns(10)
 	sqlDB.SetMaxOpenConns(30)
 	sqlDB.SetConnMaxLifetime(time.Hour)

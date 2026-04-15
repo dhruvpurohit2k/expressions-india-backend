@@ -28,7 +28,7 @@ func (s *Service) GetLatestActivity() ([]dto.LatestActivity, error) {
 		UNION ALL
 		SELECT id, title, NULL,       NULL,     'course'  AS type, created_at FROM courses
 		ORDER BY created_at DESC
-		LIMIT 10
+		LIMIT 5
 	`
 	var activities []dto.LatestActivity
 	err := s.db.Raw(query).Scan(&activities).Error

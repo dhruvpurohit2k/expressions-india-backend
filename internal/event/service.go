@@ -606,6 +606,7 @@ func (s *Service) GetCompletedCarouselImages() ([]string, error) {
 	if err := s.db.Model(&models.Event{}).
 		Where("status = ?", "completed").
 		Preload("Medias").
+		Preload("PromotionalMedia").
 		Order("end_date DESC").
 		Limit(4).
 		Find(&events).Error; err != nil {
@@ -614,8 +615,15 @@ func (s *Service) GetCompletedCarouselImages() ([]string, error) {
 
 	var urls []string
 	for _, e := range events {
+		// Prefer Medias (photos uploaded when the event was completed).
+		// Fall back to PromotionalMedia for events that were originally created as
+		// upcoming (with promo images) and later flipped to completed.
+		candidates := e.Medias
+		if len(candidates) == 0 {
+			candidates = e.PromotionalMedia
+		}
 		count := 0
-		for _, m := range e.Medias {
+		for _, m := range candidates {
 			if count >= 3 {
 				break
 			}

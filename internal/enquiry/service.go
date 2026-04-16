@@ -40,12 +40,13 @@ func (s *Service) GetEnquiryListFiltered(filter utils.EnquiryFilter) ([]dto.Enqu
 	result := make([]dto.EnquiryListItemDTO, 0, len(enquiries))
 	for _, e := range enquiries {
 		result = append(result, dto.EnquiryListItemDTO{
-			ID:        e.ID,
-			Subject:   e.Subject,
-			Name:      e.Name,
-			Email:     e.Email,
-			Phone:     e.Phone,
-			CreatedAt: e.CreatedAt,
+			ID:          e.ID,
+			Name:        e.Name,
+			Subject:     e.Subject,
+			Designation: e.Designation,
+			Email:       e.Email,
+			Phone:       e.Phone,
+			CreatedAt:   e.CreatedAt,
 		})
 	}
 	return result, total, nil
@@ -57,13 +58,14 @@ func (s *Service) GetEnquiryById(id string) (*dto.EnquiryDetailDTO, error) {
 		return nil, err
 	}
 	return &dto.EnquiryDetailDTO{
-		ID:        enquiry.ID,
-		Subject:   enquiry.Subject,
-		Name:      enquiry.Name,
-		Email:     enquiry.Email,
-		Phone:     enquiry.Phone,
-		Message:   enquiry.Message,
-		CreatedAt: enquiry.CreatedAt,
+		ID:          enquiry.ID,
+		Name:        enquiry.Name,
+		Subject:     enquiry.Subject,
+		Designation: enquiry.Designation,
+		Email:       enquiry.Email,
+		Phone:       enquiry.Phone,
+		Message:     enquiry.Message,
+		CreatedAt:   enquiry.CreatedAt,
 	}, nil
 }
 
@@ -73,10 +75,11 @@ func (s *Service) DeleteEnquiry(id string) error {
 
 func (s *Service) CreateEnquiry(enquiry *dto.EnquiryCreateDTO) error {
 	return s.db.Create(&models.Enquiry{
-		Subject: enquiry.Subject,
-		Name:    enquiry.Name,
-		Email:   enquiry.Email,
-		Phone:   enquiry.Phone,
-		Message: enquiry.Message,
+		Name:        enquiry.Name,
+		Subject:     enquiry.Subject,
+		Designation: enquiry.Designation,
+		Email:       enquiry.Email,
+		Phone:       enquiry.Phone,
+		Message:     enquiry.Message,
 	}).Error
 }

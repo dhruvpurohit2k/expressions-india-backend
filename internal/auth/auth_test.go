@@ -8,11 +8,21 @@ import (
 	"testing"
 
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/auth"
+	"github.com/dhruvpurohit2k/expressions-india-backend/internal/dto"
+	"github.com/dhruvpurohit2k/expressions-india-backend/internal/models"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/testutil"
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
-func setupRouter(t *testing.T) *gin.Engine {
+type testRig struct {
+	r   *gin.Engine
+	svc *auth.Service
+	db  *gorm.DB
+}
+
+func setupRouter(t *testing.T) *testRig {
 	t.Helper()
 	db := testutil.NewTestDB(t)
 	svc := auth.NewService(db)
@@ -21,10 +31,31 @@ func setupRouter(t *testing.T) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.POST("/auth/login", ctrl.Login)
-	r.POST("/auth/signup", ctrl.Signup)
 	r.POST("/auth/refresh", ctrl.Refresh)
 	r.POST("/auth/logout", ctrl.Logout)
-	return r
+	return &testRig{r: r, svc: svc, db: db}
+}
+
+// seedPasswordUser inserts a password-auth user (admin) directly into the DB.
+// Used as a test fixture in place of the removed public signup endpoint.
+func seedPasswordUser(t *testing.T, db *gorm.DB, email, password string) {
+	t.Helper()
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	pw := string(hash)
+	u := models.User{
+		Email:         email,
+		Password:      &pw,
+		EmailVerified: true,
+		IsAdmin:       true,
+		Provider:      models.ProviderPassword,
+		ProviderSub:   "password:" + email,
+	}
+	if err := db.Create(&u).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
 }
 
 func jsonBody(t *testing.T, v any) *bytes.Buffer {
@@ -58,27 +89,13 @@ func parseResp(t *testing.T, w *httptest.ResponseRecorder) map[string]any {
 	return m
 }
 
-// signupUser is a test helper that creates a user and returns the response recorder.
-func signupUser(t *testing.T, r *gin.Engine, email, password string) *httptest.ResponseRecorder {
-	t.Helper()
-	return do(r, "POST", "/auth/signup", jsonBody(t, map[string]string{
-		"email":    email,
-		"password": password,
-		"name":     "Test User",
-	}))
-}
-
 // ---- Login tests ----
 
 func TestLogin_Success(t *testing.T) {
-	r := setupRouter(t)
+	rig := setupRouter(t)
+	seedPasswordUser(t, rig.db, "login@example.com", "password123")
 
-	w := signupUser(t, r, "login@example.com", "password123")
-	if w.Code != http.StatusOK {
-		t.Fatalf("signup failed: %d %s", w.Code, w.Body.String())
-	}
-
-	w = do(r, "POST", "/auth/login", jsonBody(t, map[string]string{
+	w := do(rig.r, "POST", "/auth/login", jsonBody(t, map[string]string{
 		"email":    "login@example.com",
 		"password": "password123",
 	}))
@@ -100,10 +117,10 @@ func TestLogin_Success(t *testing.T) {
 }
 
 func TestLogin_WrongPassword(t *testing.T) {
-	r := setupRouter(t)
-	signupUser(t, r, "wrongpw@example.com", "correctpassword")
+	rig := setupRouter(t)
+	seedPasswordUser(t, rig.db, "wrongpw@example.com", "correctpassword")
 
-	w := do(r, "POST", "/auth/login", jsonBody(t, map[string]string{
+	w := do(rig.r, "POST", "/auth/login", jsonBody(t, map[string]string{
 		"email":    "wrongpw@example.com",
 		"password": "badpassword",
 	}))
@@ -114,9 +131,9 @@ func TestLogin_WrongPassword(t *testing.T) {
 }
 
 func TestLogin_UnknownEmail(t *testing.T) {
-	r := setupRouter(t)
+	rig := setupRouter(t)
 
-	w := do(r, "POST", "/auth/login", jsonBody(t, map[string]string{
+	w := do(rig.r, "POST", "/auth/login", jsonBody(t, map[string]string{
 		"email":    "nobody@example.com",
 		"password": "password123",
 	}))
@@ -127,9 +144,9 @@ func TestLogin_UnknownEmail(t *testing.T) {
 }
 
 func TestLogin_InvalidEmailFormat(t *testing.T) {
-	r := setupRouter(t)
+	rig := setupRouter(t)
 
-	w := do(r, "POST", "/auth/login", jsonBody(t, map[string]string{
+	w := do(rig.r, "POST", "/auth/login", jsonBody(t, map[string]string{
 		"email":    "not-an-email",
 		"password": "password123",
 	}))
@@ -140,9 +157,9 @@ func TestLogin_InvalidEmailFormat(t *testing.T) {
 }
 
 func TestLogin_MissingPassword(t *testing.T) {
-	r := setupRouter(t)
+	rig := setupRouter(t)
 
-	w := do(r, "POST", "/auth/login", jsonBody(t, map[string]string{
+	w := do(rig.r, "POST", "/auth/login", jsonBody(t, map[string]string{
 		"email": "test@example.com",
 	}))
 
@@ -151,86 +168,48 @@ func TestLogin_MissingPassword(t *testing.T) {
 	}
 }
 
-// ---- Signup tests ----
+// ---- Register (admin path) tests ----
 
-func TestSignup_Success(t *testing.T) {
-	r := setupRouter(t)
+func TestRegister_CreatesPasswordAdmin(t *testing.T) {
+	rig := setupRouter(t)
 
-	w := do(r, "POST", "/auth/signup", jsonBody(t, map[string]string{
-		"email":    "newuser@example.com",
-		"password": "securepass",
-		"name":     "New User",
-		"phone":    "9876543210",
-	}))
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	resp, err := rig.svc.Register(dto.RegisterRequest{
+		Email:    "newadmin@example.com",
+		Password: "securepass",
+		Name:     "New Admin",
+		IsAdmin:  true,
+	})
+	if err != nil {
+		t.Fatalf("register: %v", err)
 	}
-	resp := parseResp(t, w)
-	if !resp["success"].(bool) {
-		t.Errorf("expected success=true")
-	}
-	data := resp["data"].(map[string]any)
-	if data["email"] != "newuser@example.com" {
-		t.Errorf("expected email in response data")
-	}
-}
-
-func TestSignup_DuplicateEmail(t *testing.T) {
-	r := setupRouter(t)
-
-	body := map[string]string{"email": "dup@example.com", "password": "securepass"}
-	w := do(r, "POST", "/auth/signup", jsonBody(t, body))
-	if w.Code != http.StatusOK {
-		t.Fatalf("first signup failed: %d", w.Code)
+	if !resp.IsAdmin {
+		t.Errorf("expected IsAdmin=true")
 	}
 
-	w = do(r, "POST", "/auth/signup", jsonBody(t, body))
-	if w.Code != http.StatusConflict {
-		t.Errorf("expected 409, got %d: %s", w.Code, w.Body.String())
+	var u models.User
+	if err := rig.db.Where("email = ?", "newadmin@example.com").First(&u).Error; err != nil {
+		t.Fatalf("lookup: %v", err)
 	}
-}
-
-func TestSignup_PasswordTooShort(t *testing.T) {
-	r := setupRouter(t)
-
-	w := do(r, "POST", "/auth/signup", jsonBody(t, map[string]string{
-		"email":    "short@example.com",
-		"password": "short",
-	}))
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Code)
-	}
-}
-
-func TestSignup_MissingEmail(t *testing.T) {
-	r := setupRouter(t)
-
-	w := do(r, "POST", "/auth/signup", jsonBody(t, map[string]string{
-		"password": "securepass",
-	}))
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Code)
+	if u.Provider != models.ProviderPassword {
+		t.Errorf("expected provider=password, got %q", u.Provider)
 	}
 }
 
 // ---- Refresh tests ----
 
 func TestRefresh_MissingToken(t *testing.T) {
-	r := setupRouter(t)
+	rig := setupRouter(t)
 
-	w := do(r, "POST", "/auth/refresh", jsonBody(t, map[string]string{}))
+	w := do(rig.r, "POST", "/auth/refresh", jsonBody(t, map[string]string{}))
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401, got %d", w.Code)
 	}
 }
 
 func TestRefresh_InvalidToken(t *testing.T) {
-	r := setupRouter(t)
+	rig := setupRouter(t)
 
-	w := do(r, "POST", "/auth/refresh", jsonBody(t, map[string]string{
+	w := do(rig.r, "POST", "/auth/refresh", jsonBody(t, map[string]string{
 		"refreshToken": "not-a-real-token",
 	}))
 	if w.Code != http.StatusUnauthorized {
@@ -239,64 +218,61 @@ func TestRefresh_InvalidToken(t *testing.T) {
 }
 
 func TestRefresh_WithValidToken(t *testing.T) {
-	r := setupRouter(t)
+	rig := setupRouter(t)
+	seedPasswordUser(t, rig.db, "refresh@example.com", "password123")
 
-	w := signupUser(t, r, "refresh@example.com", "password123")
-	if w.Code != http.StatusOK {
-		t.Fatalf("signup failed: %d", w.Code)
+	loginW := do(rig.r, "POST", "/auth/login", jsonBody(t, map[string]string{
+		"email":    "refresh@example.com",
+		"password": "password123",
+	}))
+	if loginW.Code != http.StatusOK {
+		t.Fatalf("login failed: %d", loginW.Code)
 	}
 
-	var signupResp struct {
+	var loginResp struct {
 		Data struct {
 			RefreshToken string `json:"refreshToken"`
 		} `json:"data"`
 	}
-	json.NewDecoder(w.Body).Decode(&signupResp)
-	refreshToken := signupResp.Data.RefreshToken
+	json.NewDecoder(loginW.Body).Decode(&loginResp)
 
-	w = do(r, "POST", "/auth/refresh", jsonBody(t, map[string]string{
-		"refreshToken": refreshToken,
+	w := do(rig.r, "POST", "/auth/refresh", jsonBody(t, map[string]string{
+		"refreshToken": loginResp.Data.RefreshToken,
 	}))
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
-	resp := parseResp(t, w)
-	if !resp["success"].(bool) {
-		t.Errorf("expected success=true")
 	}
 }
 
 // ---- Logout tests ----
 
 func TestLogout_WithoutCookie(t *testing.T) {
-	r := setupRouter(t)
+	rig := setupRouter(t)
 
-	w := do(r, "POST", "/auth/logout", nil)
+	w := do(rig.r, "POST", "/auth/logout", nil)
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", w.Code)
 	}
 }
 
 func TestLogout_ClearsCookies(t *testing.T) {
-	r := setupRouter(t)
+	rig := setupRouter(t)
+	seedPasswordUser(t, rig.db, "logout@example.com", "password123")
 
-	w := signupUser(t, r, "logout@example.com", "password123")
-	if w.Code != http.StatusOK {
-		t.Fatalf("signup failed: %d", w.Code)
-	}
-
-	// Set the refresh cookie from signup and then logout.
-	var cookies []*http.Cookie
-	for _, c := range w.Result().Cookies() {
-		cookies = append(cookies, c)
+	loginW := do(rig.r, "POST", "/auth/login", jsonBody(t, map[string]string{
+		"email":    "logout@example.com",
+		"password": "password123",
+	}))
+	if loginW.Code != http.StatusOK {
+		t.Fatalf("login failed: %d", loginW.Code)
 	}
 
 	logoutReq := httptest.NewRequest("POST", "/auth/logout", nil)
-	for _, c := range cookies {
+	for _, c := range loginW.Result().Cookies() {
 		logoutReq.AddCookie(c)
 	}
 	lw := httptest.NewRecorder()
-	r.ServeHTTP(lw, logoutReq)
+	rig.r.ServeHTTP(lw, logoutReq)
 
 	if lw.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", lw.Code)

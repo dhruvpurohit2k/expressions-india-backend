@@ -202,7 +202,8 @@ func TestEnrollUser_Success(t *testing.T) {
 	courseID := seedCourse(t, db, "Enrollment Course")
 
 	// Create a user to enroll.
-	user := models.User{Email: "enroll@example.com", Password: "hashed", IsAdmin: false}
+	pw := "hashed"
+	user := models.User{Email: "enroll@example.com", Password: &pw, IsAdmin: false, Provider: models.ProviderPassword, ProviderSub: "password:enroll@example.com"}
 	if err := db.Create(&user).Error; err != nil {
 		t.Fatalf("seed user: %v", err)
 	}
@@ -232,7 +233,8 @@ func TestRevokeAccess_Success(t *testing.T) {
 	r, db := setupRouter(t)
 	courseID := seedCourse(t, db, "Revoke Course")
 
-	user := models.User{Email: "revoke@example.com", Password: "hashed", IsAdmin: false}
+	pw2 := "hashed"
+	user := models.User{Email: "revoke@example.com", Password: &pw2, IsAdmin: false, Provider: models.ProviderPassword, ProviderSub: "password:revoke@example.com"}
 	if err := db.Create(&user).Error; err != nil {
 		t.Fatalf("seed user: %v", err)
 	}

@@ -159,7 +159,7 @@ func initServer() *Server {
 		corsConfig.AllowOrigins = parts
 	} else {
 		// Dev fallback: allow common local dev servers.
-		corsConfig.AllowOrigins = []string{"http://localhost:5173", "http://localhost:3000"}
+		corsConfig.AllowOrigins = []string{"http://localhost:5173", "http://localhost:3000", "http://localhost:8081"}
 	}
 	r.Use(cors.New(corsConfig))
 	r.Use(MaxBodyBytes(2 << 20)) // 2 MB cap on JSON/form bodies (file uploads go to S3 directly)
@@ -196,12 +196,14 @@ func (s *Server) SetupRoutes() {
 
 	groupAuth := s.r.Group("/auth")
 	{
+		// Password login — admins only (service rejects non-password accounts).
 		groupAuth.POST("/login", publicLimit, s.authController.Login)
+		// OIDC sign-in — end users on Expo (Android: Google; iOS: Google + Apple).
+		groupAuth.POST("/google", publicLimit, s.authController.Google)
+		groupAuth.POST("/apple", publicLimit, s.authController.Apple)
 		groupAuth.POST("/refresh", publicLimit, s.authController.Refresh)
 		groupAuth.POST("/logout", s.authController.Logout)
-		// Signup is public — anyone can create a non-admin account.
-		groupAuth.POST("/signup", publicLimit, s.authController.Signup)
-		// Register is admin-only: only an existing admin can create new users.
+		// Register is admin-only: only an existing admin can create new password admins.
 		groupAuth.POST("/register", auth.RequireAdmin(), s.authController.Register)
 	}
 

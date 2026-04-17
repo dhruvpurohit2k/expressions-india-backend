@@ -218,10 +218,14 @@ func SeedAdminUser(s *Server) error {
 	if err != nil {
 		return err
 	}
+	pw := string(hash)
 	user := models.User{
-		Email:    email,
-		Password: string(hash),
-		IsAdmin:  true,
+		Email:         email,
+		Password:      &pw,
+		EmailVerified: true,
+		IsAdmin:       true,
+		Provider:      models.ProviderPassword,
+		ProviderSub:   "password:" + email,
 	}
 	return s.db.Create(&user).Error
 }

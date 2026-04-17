@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -21,7 +22,15 @@ import (
 )
 
 type S3 struct {
-	S3 *s3.Client
+	S3     *s3.Client
+	Bucket string
+}
+
+func bucketName() string {
+	if b := os.Getenv("S3_BUCKET"); b != "" {
+		return b
+	}
+	return "expressions-india"
 }
 
 func InitS3() *S3 {
@@ -42,6 +51,7 @@ func InitS3() *S3 {
 	}
 
 	return &S3{
+		Bucket: bucketName(),
 		S3: s3.NewFromConfig(cfg, func(o *s3.Options) {
 			o.UsePathStyle = true
 		})}
@@ -63,11 +73,13 @@ func (s *S3) UploadLocal(fileUrl string) (string, string, error) {
 		n, _ := file.Read(buffer)
 		contentType = http.DetectContentType(buffer[:n])
 	}
-	file.Seek(0, 0)
+	if _, err := file.Seek(0, 0); err != nil {
+		return "", "", fmt.Errorf("seek failed: %w", err)
+	}
 
 	s3Key := uuid.Must(uuid.NewV7()).String()
 	result, err := uploader.Upload(context.TODO(), &s3.PutObjectInput{
-		Bucket:             aws.String("expressions-india"),
+		Bucket:             aws.String(s.Bucket),
 		Key:                aws.String(s3Key),
 		Body:               file,
 		ContentType:        aws.String(contentType),
@@ -93,10 +105,11 @@ func (s *S3) UploadNetwork(file io.Reader) (string, string, string, error) {
 
 	s3Key := uuid.Must(uuid.NewV7()).String()
 	result, err := uploader.Upload(context.TODO(), &s3.PutObjectInput{
-		Bucket:      aws.String("expressions-india"),
-		Key:         aws.String(s3Key),
-		Body:        fullBody,
-		ContentType: aws.String(contentType),
+		Bucket:             aws.String(s.Bucket),
+		Key:                aws.String(s3Key),
+		Body:               fullBody,
+		ContentType:        aws.String(contentType),
+		ContentDisposition: aws.String("inline"),
 	})
 
 	if err != nil {
@@ -109,7 +122,7 @@ func (s *S3) UploadNetwork(file io.Reader) (string, string, string, error) {
 func (s *S3) DeleteFromS3(s3Key string) error {
 
 	_, err := s.S3.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
-		Bucket: aws.String("expressions-india"),
+		Bucket: aws.String(s.Bucket),
 		Key:    aws.String(s3Key),
 	})
 	if err != nil {
@@ -131,7 +144,7 @@ func (s *S3) Delete(s3Key string) error {
 func (s *S3) PresignUpload(id, contentType string, ttl time.Duration) (presignedURL string, err error) {
 	pc := s3.NewPresignClient(s.S3)
 	req, err := pc.PresignPutObject(context.TODO(), &s3.PutObjectInput{
-		Bucket:      aws.String("expressions-india"),
+		Bucket:      aws.String(s.Bucket),
 		Key:         aws.String(id),
 		ContentType: aws.String(contentType),
 	}, func(o *s3.PresignOptions) {
@@ -145,5 +158,6 @@ func (s *S3) PresignUpload(id, contentType string, ttl time.Duration) (presigned
 
 // PublicURL returns the publicly accessible URL for an already-uploaded object.
 func (s *S3) PublicURL(id string) string {
-	return fmt.Sprintf("%s/expressions-india/%s", os.Getenv("S3_URL"), id)
+	base := strings.TrimRight(os.Getenv("S3_URL"), "/")
+	return fmt.Sprintf("%s/%s/%s", base, s.Bucket, id)
 }

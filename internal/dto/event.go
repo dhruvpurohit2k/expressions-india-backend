@@ -35,14 +35,15 @@ type EventCreateRequestDTO struct {
 	IsPaid                *bool      `form:"isPaid" binding:"required"`
 	Price                 *int       `form:"price"`
 	// Pre-uploaded files: each element is a JSON-encoded UploadedMediaRef.
-	ThumbnailUpload          string   `form:"thumbnailUpload"`
-	PromotionalMediaUploads  []string `form:"promotionalMediaUploads"`
-	MediaUploads             []string `form:"mediaUploads"`
-	DocumentUploads          []string `form:"documentUploads"`
-	VideoLinks               []string `form:"videoLinks"`
-	PromotionalVideoLinks    []string `form:"promotionalVideoLinks"`
-	Audiences                []string `form:"audiences" binding:"required"`
-	Status                   *string  `form:"status" binding:"required"`
+	ThumbnailUpload               string   `form:"thumbnailUpload"`
+	PromotionalMediaUploads       []string `form:"promotionalMediaUploads"`
+	PromotionalDocumentUploads    []string `form:"promotionalDocumentUploads"`
+	MediaUploads                  []string `form:"mediaUploads"`
+	DocumentUploads               []string `form:"documentUploads"`
+	VideoLinks                    []string `form:"videoLinks"`
+	PromotionalVideoLinks         []string `form:"promotionalVideoLinks"`
+	Audiences                     []string `form:"audiences" binding:"required"`
+	Status                        *string  `form:"status" binding:"required"`
 }
 
 type EventUpdateRequestDTO struct {
@@ -58,17 +59,19 @@ type EventUpdateRequestDTO struct {
 	IsOnline                   *bool      `form:"isOnline" binding:"required"`
 	IsPaid                     *bool      `form:"isPaid" binding:"required"`
 	Price                      *int       `form:"price"`
-	DeletedMediaIds            []string   `form:"deletedMediaIds"`
-	DeletedDocumentIds         []string   `form:"deletedDocumentIds"`
-	DeletedPromotionalMediaIds []string   `form:"deletedPromotionalMediaIds"`
-	DeletedThumbnailId         *string    `form:"deletedThumbnailId"`
+	DeletedMediaIds                  []string   `form:"deletedMediaIds"`
+	DeletedDocumentIds               []string   `form:"deletedDocumentIds"`
+	DeletedPromotionalMediaIds       []string   `form:"deletedPromotionalMediaIds"`
+	DeletedPromotionalDocumentIds    []string   `form:"deletedPromotionalDocumentIds"`
+	DeletedThumbnailId               *string    `form:"deletedThumbnailId"`
 	// Pre-uploaded files: each element is a JSON-encoded UploadedMediaRef.
-	ThumbnailUpload         string   `form:"thumbnailUpload"`
-	PromotionalMediaUploads []string `form:"promotionalMediaUploads"`
-	MediaUploads            []string `form:"mediaUploads"`
-	DocumentUploads         []string `form:"documentUploads"`
-	VideoLinks              []string `form:"videoLinks"`
-	PromotionalVideoLinks   []string `form:"promotionalVideoLinks"`
-	Audiences               []string `form:"audiences" binding:"required"`
-	Status                  *string  `form:"status" binding:"required"`
+	ThumbnailUpload               string   `form:"thumbnailUpload"`
+	PromotionalMediaUploads       []string `form:"promotionalMediaUploads"`
+	PromotionalDocumentUploads    []string `form:"promotionalDocumentUploads"`
+	MediaUploads                  []string `form:"mediaUploads"`
+	DocumentUploads               []string `form:"documentUploads"`
+	VideoLinks                    []string `form:"videoLinks"`
+	PromotionalVideoLinks         []string `form:"promotionalVideoLinks"`
+	Audiences                     []string `form:"audiences" binding:"required"`
+	Status                        *string  `form:"status" binding:"required"`
 }

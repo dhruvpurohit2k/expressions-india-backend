@@ -11,7 +11,24 @@ import (
 	"github.com/google/uuid"
 )
 
-const presignTTL = 15 * time.Minute
+const (
+	presignTTL      = 15 * time.Minute
+	maxPresignItems = 20
+)
+
+var allowedContentTypes = map[string]bool{
+	"image/jpeg":      true,
+	"image/png":       true,
+	"image/webp":      true,
+	"image/gif":       true,
+	"image/svg+xml":   true,
+	"video/mp4":       true,
+	"video/webm":      true,
+	"audio/mpeg":      true,
+	"audio/mp4":       true,
+	"audio/wav":       true,
+	"application/pdf": true,
+}
 
 type Controller struct {
 	s3 *storage.S3
@@ -34,9 +51,17 @@ func (ctrl *Controller) Presign(c *gin.Context) {
 		utils.Fail(c, http.StatusBadRequest, "BAD_REQUEST", "at least one file is required")
 		return
 	}
+	if len(items) > maxPresignItems {
+		utils.Fail(c, http.StatusBadRequest, "BAD_REQUEST", "too many files in one request")
+		return
+	}
 
 	result := make([]dto.PresignResponseItem, 0, len(items))
 	for _, item := range items {
+		if !allowedContentTypes[item.ContentType] {
+			utils.Fail(c, http.StatusBadRequest, "BAD_REQUEST", "content type not allowed: "+item.ContentType)
+			return
+		}
 		id := uuid.Must(uuid.NewV7()).String()
 		presignedURL, err := ctrl.s3.PresignUpload(id, item.ContentType, presignTTL)
 		if err != nil {

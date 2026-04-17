@@ -1,13 +1,17 @@
 package auth
 
 import (
+	"errors"
 	"net/http"
-	"strings"
+	"os"
 
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/dto"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/pkg/utils"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
+
+func isProd() bool { return os.Getenv("APP_ENV") == "production" }
 
 const (
 	cookieAccess  = "ei_access"
@@ -22,14 +26,27 @@ func NewController(service *Service) *Controller {
 	return &Controller{service: service}
 }
 
+func sameSite() http.SameSite {
+	switch os.Getenv("COOKIE_SAMESITE") {
+	case "none":
+		return http.SameSiteNoneMode
+	case "strict":
+		return http.SameSiteStrictMode
+	default:
+		return http.SameSiteLaxMode
+	}
+}
+
 func (ctrl *Controller) setTokenCookies(c *gin.Context, resp *dto.AuthResponse) {
-	secure := gin.Mode() == gin.ReleaseMode
+	secure := isProd()
+	c.SetSameSite(sameSite())
 	c.SetCookie(cookieAccess, resp.AccessToken, 15*60, "/", "", secure, true)
 	c.SetCookie(cookieRefresh, resp.RefreshToken, 7*24*60*60, "/auth", "", secure, true)
 }
 
 func (ctrl *Controller) clearTokenCookies(c *gin.Context) {
-	secure := gin.Mode() == gin.ReleaseMode
+	secure := isProd()
+	c.SetSameSite(sameSite())
 	c.SetCookie(cookieAccess, "", -1, "/", "", secure, true)
 	c.SetCookie(cookieRefresh, "", -1, "/auth", "", secure, true)
 }
@@ -97,8 +114,7 @@ func (ctrl *Controller) Signup(c *gin.Context) {
 	}
 	resp, err := ctrl.service.Signup(req)
 	if err != nil {
-		msg := err.Error()
-		if strings.Contains(msg, "UNIQUE") || strings.Contains(msg, "unique") || strings.Contains(msg, "duplicate") {
+		if errors.Is(err, gorm.ErrDuplicatedKey) {
 			utils.Fail(c, http.StatusConflict, "SIGNUP_ERROR", "an account with this email already exists")
 		} else {
 			utils.FailInternal(c, "SIGNUP_ERROR", "could not create account", err)

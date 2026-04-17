@@ -98,6 +98,7 @@ func (s *Service) GetAllEvents() ([]models.Event, error) {
 		Preload("Documents").
 		Preload("VideoLinks").
 		Preload("PromotionalMedia").
+		Preload("PromotionalDocuments").
 		Preload("Audiences").
 		Find(&events).Error
 
@@ -149,6 +150,7 @@ func (s *Service) GetEventById(id string) (*dto.EventDTO, error) {
 		Preload("VideoLinks").
 		Preload("PromotionalVideoLinks").
 		Preload("PromotionalMedia").
+		Preload("PromotionalDocuments").
 		Preload("Audiences").
 		First(&event).Error
 
@@ -213,6 +215,13 @@ func (s *Service) CreateEvent(data *dto.EventCreateRequestDTO) error {
 			return fmt.Errorf("invalid promotionalMediaUploads: %w", err)
 		}
 		newEvent.PromotionalMedia = s.mediasFromRefs(refs)
+	}
+	if len(data.PromotionalDocumentUploads) > 0 {
+		refs, err := parseMediaRefs(data.PromotionalDocumentUploads)
+		if err != nil {
+			return fmt.Errorf("invalid promotionalDocumentUploads: %w", err)
+		}
+		newEvent.PromotionalDocuments = s.mediasFromRefs(refs)
 	}
 	if len(data.DocumentUploads) > 0 {
 		refs, err := parseMediaRefs(data.DocumentUploads)
@@ -393,6 +402,17 @@ func (s *Service) UpdateEvent(id string, newData *dto.EventUpdateRequestDTO) err
 			log.Printf("S3 cleanup failed for deleted document %s: %v", docID, err)
 		}
 	}
+	for _, docID := range newData.DeletedPromotionalDocumentIds {
+		if err := s.db.Model(&event).Association("PromotionalDocuments").Unscoped().Delete(&models.Media{ID: docID}); err != nil {
+			log.Printf("failed to unassociate promotional document %s: %v", docID, err)
+		}
+		if err := s.db.Delete(&models.Media{}, "id = ?", docID).Error; err != nil {
+			return err
+		}
+		if err := s.s3.Delete(docID); err != nil {
+			log.Printf("S3 cleanup failed for deleted promotional document %s: %v", docID, err)
+		}
+	}
 
 	if len(newData.PromotionalMediaUploads) > 0 {
 		refs, err := parseMediaRefs(newData.PromotionalMediaUploads)
@@ -400,6 +420,15 @@ func (s *Service) UpdateEvent(id string, newData *dto.EventUpdateRequestDTO) err
 			return fmt.Errorf("invalid promotionalMediaUploads: %w", err)
 		}
 		if err := s.db.Model(&event).Association("PromotionalMedia").Append(s.mediasFromRefs(refs)); err != nil {
+			return err
+		}
+	}
+	if len(newData.PromotionalDocumentUploads) > 0 {
+		refs, err := parseMediaRefs(newData.PromotionalDocumentUploads)
+		if err != nil {
+			return fmt.Errorf("invalid promotionalDocumentUploads: %w", err)
+		}
+		if err := s.db.Model(&event).Association("PromotionalDocuments").Append(s.mediasFromRefs(refs)); err != nil {
 			return err
 		}
 	}
@@ -479,6 +508,7 @@ func (s *Service) DeleteEvent(id string) error {
 	if err := s.db.
 		Preload("Thumbnail").
 		Preload("PromotionalMedia").
+		Preload("PromotionalDocuments").
 		Preload("Medias").
 		Preload("Documents").
 		Preload("VideoLinks").
@@ -488,11 +518,14 @@ func (s *Service) DeleteEvent(id string) error {
 		return err
 	}
 
-	allMedia := append(append(event.PromotionalMedia, event.Medias...), event.Documents...)
+	allMedia := append(append(append(event.PromotionalMedia, event.PromotionalDocuments...), event.Medias...), event.Documents...)
 	allLinks := append(event.VideoLinks, event.PromotionalVideoLinks...)
 
 	// Clear all junction-table associations first.
 	if err := s.db.Model(&event).Association("PromotionalMedia").Clear(); err != nil {
+		return err
+	}
+	if err := s.db.Model(&event).Association("PromotionalDocuments").Clear(); err != nil {
 		return err
 	}
 	if err := s.db.Model(&event).Association("Medias").Clear(); err != nil {

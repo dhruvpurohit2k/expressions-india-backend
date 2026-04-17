@@ -29,6 +29,7 @@ type Event struct {
 	ThumbnailID           *string        `gorm:"type:uuid" json:"thumbnailId"`
 	Thumbnail             *Media         `gorm:"foreignKey:ThumbnailID" json:"thumbnail"`
 	PromotionalMedia      []Media        `gorm:"many2many:event_promotional_media;" json:"promotionalMedia"`
+	PromotionalDocuments  []Media        `gorm:"many2many:event_promotional_documents;" json:"promotionalDocuments"`
 	Medias                []Media        `gorm:"many2many:event_media;" json:"medias"`
 	Documents             []Media        `gorm:"many2many:event_documents;" json:"documents"`
 	PromotionalVideoLinks []Link         `gorm:"many2many:event_promotional_video_links;" json:"promotionalVideoLinks"`

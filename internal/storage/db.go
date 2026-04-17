@@ -27,18 +27,25 @@ func InitDB() *gorm.DB {
 		}
 
 		if env == "production" {
-			dns := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable&search_path=public",
+			sslMode := os.Getenv("DB_SSLMODE")
+			if sslMode == "" {
+				sslMode = "require"
+			}
+			dns := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s&search_path=public",
 				os.Getenv("DB_USERNAME"),
 				os.Getenv("DB_PASSWORD"),
 				os.Getenv("DB_HOST"),
 				os.Getenv("DB_PORT"),
-				os.Getenv("DB_NAME"))
+				os.Getenv("DB_NAME"),
+				sslMode)
 			db, err = gorm.Open(postgres.Open(dns), &gorm.Config{
-				Logger: logger.Default.LogMode(logger.Error),
+				Logger:         logger.Default.LogMode(logger.Error),
+				TranslateError: true,
 			})
 		} else {
 			db, err = gorm.Open(sqlite.Open("dev.db"), &gorm.Config{
-				Logger: logger.Default.LogMode(logger.Info),
+				Logger:         logger.Default.LogMode(logger.Info),
+				TranslateError: true,
 			})
 		}
 

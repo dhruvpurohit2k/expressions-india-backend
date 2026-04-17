@@ -8,9 +8,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dhruvpurohit2k/expressions-india-backend/internal/almanac"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/article"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/audience"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/auth"
+	"github.com/dhruvpurohit2k/expressions-india-backend/internal/brochure"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/course"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/enquiry"
 	"github.com/dhruvpurohit2k/expressions-india-backend/internal/event"
@@ -45,6 +47,8 @@ type Server struct {
 	authController           *auth.Controller
 	teamController           *team.Controller
 	uploadController         *upload.Controller
+	almanacController        *almanac.Controller
+	brochureController       *brochure.Controller
 }
 
 func initServer() *Server {
@@ -52,7 +56,7 @@ func initServer() *Server {
 	db := storage.InitDB()
 	s3 := storage.InitS3()
 
-	if os.Getenv("DB_FRESH_START") == "true" {
+	if os.Getenv("DB_FRESH_START") == "true" && os.Getenv("APP_ENV") != "production" {
 		db.Migrator().DropTable(
 			&models.User{},
 			&models.Event{},
@@ -69,9 +73,9 @@ func initServer() *Server {
 			&models.CourseChapter{},
 			&models.Team{},
 			&models.Member{},
+			&models.Audience{},
 		)
 	}
-	db.Migrator().DropTable(&models.Audience{})
 	err := db.AutoMigrate(
 		&models.User{},
 		&models.Event{},
@@ -89,6 +93,8 @@ func initServer() *Server {
 		&models.CourseChapter{},
 		&models.Team{},
 		&models.Member{},
+		&models.Almanac{},
+		&models.Brochure{},
 	)
 	if err != nil {
 		log.Fatal(err.Error())
@@ -132,6 +138,12 @@ func initServer() *Server {
 
 	uploadController := upload.NewController(s3)
 
+	almanacService := almanac.NewService(db, s3)
+	almanacController := almanac.NewController(almanacService)
+
+	brochureService := brochure.NewService(db, s3)
+	brochureController := brochure.NewController(brochureService)
+
 	r := gin.Default()
 	corsConfig := cors.Config{
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -140,12 +152,17 @@ func initServer() *Server {
 		AllowCredentials: true,
 	}
 	if allowedOrigins := os.Getenv("ALLOWED_ORIGINS"); allowedOrigins != "" {
-		corsConfig.AllowOrigins = strings.Split(allowedOrigins, ",")
+		parts := strings.Split(allowedOrigins, ",")
+		for i := range parts {
+			parts[i] = strings.TrimSpace(parts[i])
+		}
+		corsConfig.AllowOrigins = parts
 	} else {
 		// Dev fallback: allow common local dev servers.
 		corsConfig.AllowOrigins = []string{"http://localhost:5173", "http://localhost:3000"}
 	}
 	r.Use(cors.New(corsConfig))
+	r.Use(MaxBodyBytes(2 << 20)) // 2 MB cap on JSON/form bodies (file uploads go to S3 directly)
 	return &Server{
 		r:                        r,
 		db:                       db,
@@ -162,6 +179,8 @@ func initServer() *Server {
 		authController:           authController,
 		teamController:           teamController,
 		uploadController:         uploadController,
+		almanacController:        almanacController,
+		brochureController:       brochureController,
 	}
 }
 
@@ -172,13 +191,16 @@ func (s *Server) SetupRoutes() {
 		})
 	})
 
+	// Per-IP rate limit for unauthenticated/abuse-prone endpoints: 1 req/sec, burst 5.
+	publicLimit := RateLimit(1, 5)
+
 	groupAuth := s.r.Group("/auth")
 	{
-		groupAuth.POST("/login", s.authController.Login)
-		groupAuth.POST("/refresh", s.authController.Refresh)
+		groupAuth.POST("/login", publicLimit, s.authController.Login)
+		groupAuth.POST("/refresh", publicLimit, s.authController.Refresh)
 		groupAuth.POST("/logout", s.authController.Logout)
 		// Signup is public — anyone can create a non-admin account.
-		groupAuth.POST("/signup", s.authController.Signup)
+		groupAuth.POST("/signup", publicLimit, s.authController.Signup)
 		// Register is admin-only: only an existing admin can create new users.
 		groupAuth.POST("/register", auth.RequireAdmin(), s.authController.Register)
 	}
@@ -237,6 +259,18 @@ func (s *Server) SetupRoutes() {
 		groupAdmin.POST("/team", s.teamController.Create)
 		groupAdmin.PUT("/team/:id", s.teamController.Update)
 		groupAdmin.DELETE("/team/:id", s.teamController.Delete)
+
+		groupAdmin.GET("/almanac", s.almanacController.GetList)
+		groupAdmin.GET("/almanac/:id", s.almanacController.GetById)
+		groupAdmin.POST("/almanac", s.almanacController.Create)
+		groupAdmin.PUT("/almanac/:id", s.almanacController.Update)
+		groupAdmin.DELETE("/almanac/:id", s.almanacController.Delete)
+
+		groupAdmin.GET("/brochure", s.brochureController.GetList)
+		groupAdmin.GET("/brochure/:id", s.brochureController.GetById)
+		groupAdmin.POST("/brochure", s.brochureController.Create)
+		groupAdmin.PUT("/brochure/:id", s.brochureController.Update)
+		groupAdmin.DELETE("/brochure/:id", s.brochureController.Delete)
 	}
 	groupApi := s.r.Group("/api")
 	{
@@ -250,7 +284,7 @@ func (s *Server) SetupRoutes() {
 		groupApi.GET("/podcast/:id", s.podcastController.GetById)
 		groupApi.GET("/journal", s.journalController.GetList)
 		groupApi.GET("/journal/:id", s.journalController.GetById)
-		groupApi.POST("/enquiry", s.enquiryController.CreateEnquiry)
+		groupApi.POST("/enquiry", publicLimit, s.enquiryController.CreateEnquiry)
 		groupApi.GET("/article", s.articleController.GetArticleListPaginated)
 		groupApi.GET("/article/audience/:audience", s.articleController.GetArticlesByAudience)
 		groupApi.GET("/article/:id", s.articleController.GetArticleById)
@@ -264,6 +298,12 @@ func (s *Server) SetupRoutes() {
 		groupApi.GET("/course/:id/chapter/:chapterId", auth.TryExtractClaims(), s.courseController.GetChapterById)
 		groupApi.GET("/team", s.teamController.GetList)
 		groupApi.GET("/team/:id", s.teamController.GetById)
+
+		groupApi.GET("/almanac", s.almanacController.GetList)
+		groupApi.GET("/almanac/:id", s.almanacController.GetById)
+
+		groupApi.GET("/brochure", s.brochureController.GetList)
+		groupApi.GET("/brochure/:id", s.brochureController.GetById)
 	}
 
 }
